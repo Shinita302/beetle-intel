@@ -1,0 +1,368 @@
+import {
+  Bug,
+  Sprout,
+  Egg,
+  Flame,
+  AlertTriangle,
+  ArrowRight,
+  ExternalLink,
+  HeartHandshake,
+  ShieldAlert,
+} from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+} from 'recharts';
+import { StatCard } from '../components/ui/StatCard';
+import { Card, CardHeader } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import type { Beetle, LarvalRecord, Pairing, PestRisk } from '../types';
+
+interface DashboardProps {
+  beetles: Beetle[];
+  larvalRecords: LarvalRecord[];
+  pairings: Pairing[];
+  pestRisks: PestRisk[];
+  onNavigate: (page: string) => void;
+}
+
+function calcHatchRate(pairings: Pairing[]): number {
+  if (pairings.length === 0) return 0;
+  const total = pairings.reduce((s, p) => s + p.totalEggsLaid, 0);
+  const hatched = pairings.reduce((s, p) => s + p.hatchedEggs, 0);
+  return total === 0 ? 0 : Math.round((hatched / total) * 100);
+}
+
+function calcFertilityScore(pairings: Pairing[]): number {
+  if (pairings.length === 0) return 0;
+  const scores = pairings.map((p) => {
+    const eggSR = p.totalEggsLaid > 0 ? p.hatchedEggs / p.totalEggsLaid : 0;
+    const larvalSR = p.hatchedEggs > 0 ? p.pupatedLarvae / p.hatchedEggs : 0;
+    const pupalSR = p.pupatedLarvae > 0 ? p.emergedAdults / p.pupatedLarvae : 0;
+    const overall = eggSR * larvalSR * pupalSR;
+    return Math.round(overall * 100);
+  });
+  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+}
+
+function getLarvalGrowthChart(beetles: Beetle[], larvalRecords: LarvalRecord[]) {
+  const top3 = beetles
+    .filter((b) => b.status === 'larva' || b.status === 'pupa')
+    .slice(0, 3);
+
+  if (top3.length === 0) {
+    const adultTop3 = beetles.filter((b) => b.status === 'adult').slice(0, 3);
+    const allRecords = adultTop3.flatMap((b) =>
+      larvalRecords
+        .filter((lr) => lr.beetleId === b.id)
+        .map((lr) => ({
+          date: lr.dateChecked.slice(5),
+          weight: lr.weight,
+          name: b.name,
+        }))
+    );
+    return allRecords;
+  }
+
+  const data: Record<string, { date: string; [key: string]: string | number }> = {};
+  top3.forEach((b) => {
+    larvalRecords
+      .filter((lr) => lr.beetleId === b.id)
+      .sort((a, b2) => a.dateChecked.localeCompare(b2.dateChecked))
+      .forEach((lr) => {
+        const key = lr.dateChecked.slice(5);
+        if (!data[key]) data[key] = { date: key };
+        data[key][b.name] = lr.weight;
+      });
+  });
+
+  return Object.values(data).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function getFertilityRanking(pairings: Pairing[]) {
+  return pairings
+    .map((p) => {
+      const eggSR = p.totalEggsLaid > 0 ? p.hatchedEggs / p.totalEggsLaid : 0;
+      const larvalSR = p.hatchedEggs > 0 ? p.pupatedLarvae / p.hatchedEggs : 0;
+      const pupalSR = p.pupatedLarvae > 0 ? p.emergedAdults / p.pupatedLarvae : 0;
+      const score = Math.round(eggSR * larvalSR * pupalSR * 100);
+      return {
+        name: `${p.maleBeetleName} x ${p.femaleBeetleName}`,
+        score,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+const severityVariant = { low: 'warning' as const, medium: 'warning' as const, high: 'danger' as const };
+const problemTypeLabel: Record<string, string> = {
+  mites: 'Mites',
+  mold: 'Mold',
+  dryness: 'Dryness',
+  'over-wet': 'Over-Wet',
+  smell: 'Foul Smell',
+  unknown: 'Unknown',
+};
+
+export function Dashboard({ beetles, larvalRecords, pairings, pestRisks, onNavigate }: DashboardProps) {
+  const activeLarvae = beetles.filter((b) => b.status === 'larva').length;
+  const avgHatchRate = calcHatchRate(pairings);
+  const avgFertility = calcFertilityScore(pairings);
+  const growthData = getLarvalGrowthChart(beetles, larvalRecords);
+  const fertilityData = getFertilityRanking(pairings);
+  const openPestRisks = pestRisks.filter((pr) => pr.status === 'open');
+  const recentPairings = [...pairings].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
+
+  const topBeetleNames = beetles
+    .filter((b) => b.status === 'larva' || b.status === 'pupa')
+    .slice(0, 3)
+    .map((b) => b.name);
+
+  const useBarChart = topBeetleNames.length === 0;
+  const chartBeetleNames = useBarChart
+    ? beetles.filter((b) => b.status === 'adult').slice(0, 3).map((b) => b.name)
+    : topBeetleNames;
+
+  const chartColors = ['#0ea5e9', '#14b8a6', '#f59e0b'];
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-bold text-gray-100">Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Breeding intelligence overview</p>
+      </div>
+
+      {/* Pest Alert Banner */}
+      {openPestRisks.length > 0 && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-red-400">
+              {openPestRisks.length} Active Pest {openPestRisks.length === 1 ? 'Alert' : 'Alerts'}
+            </p>
+            <p className="text-xs text-red-400/70 mt-0.5">
+              {openPestRisks.map((pr) => `${pr.bottleId}: ${problemTypeLabel[pr.problemType]}`).join(' | ')}
+            </p>
+          </div>
+          <button
+            onClick={() => onNavigate('pest-risk')}
+            className="text-xs text-red-400 hover:text-red-300 font-medium flex items-center gap-1 flex-shrink-0"
+          >
+            View <ArrowRight className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="Total Beetles"
+          value={beetles.length}
+          icon={Bug}
+          color="bg-sky-500/15 text-sky-400"
+          trend={{ value: 12, label: 'this month' }}
+          onClick={() => onNavigate('add-beetle')}
+        />
+        <StatCard
+          label="Active Larvae"
+          value={activeLarvae}
+          icon={Sprout}
+          color="bg-emerald-500/15 text-emerald-400"
+          trend={{ value: 8, label: 'growth' }}
+          onClick={() => onNavigate('larval-growth')}
+        />
+        <StatCard
+          label="Avg Hatch Rate"
+          value={`${avgHatchRate}%`}
+          icon={Egg}
+          color="bg-amber-500/15 text-amber-400"
+        />
+        <StatCard
+          label="Avg Fertility"
+          value={`${avgFertility}`}
+          icon={Flame}
+          color="bg-teal-500/15 text-teal-400"
+        />
+      </div>
+
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Larval Growth Chart */}
+        <Card>
+          <CardHeader title="Larval Growth Tracking" subtitle="Weight over time (top beetles)" />
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              {useBarChart ? (
+                <BarChart data={growthData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                  <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} />
+                  <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#111827',
+                      border: '1px solid #1f2937',
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                  />
+                  <Bar dataKey="weight" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              ) : (
+                <LineChart data={growthData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                  <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} />
+                  <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#111827',
+                      border: '1px solid #1f2937',
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                  />
+                  {chartBeetleNames.map((name, i) => (
+                    <Line
+                      key={name}
+                      type="monotone"
+                      dataKey={name}
+                      stroke={chartColors[i % chartColors.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: chartColors[i % chartColors.length] }}
+                    />
+                  ))}
+                </LineChart>
+              )}
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* Fertility Ranking */}
+        <Card>
+          <CardHeader title="Fertility Ranking" subtitle="Pairing performance score" />
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={fertilityData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" horizontal={false} />
+                <XAxis type="number" domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 11 }} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  tick={{ fill: '#9ca3af', fontSize: 10 }}
+                  width={140}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#111827',
+                    border: '1px solid #1f2937',
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                />
+                <Bar dataKey="score" fill="#14b8a6" radius={[0, 4, 4, 0]} barSize={20} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
+
+      {/* Bottom Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Recent Pairings */}
+        <Card className="lg:col-span-2">
+          <CardHeader title="Recent Pairings" action={
+            <button onClick={() => onNavigate('pairing')} className="text-xs text-sky-400 hover:text-sky-300 font-medium flex items-center gap-1">
+              All <ExternalLink className="w-3 h-3" />
+            </button>
+          } />
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-800">
+                  <th className="text-left py-2 text-gray-500 font-medium">Pair</th>
+                  <th className="text-left py-2 text-gray-500 font-medium">Date</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">Eggs</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">Hatched</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">Emerged</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentPairings.map((p) => (
+                  <tr key={p.id} className="border-b border-gray-800/50">
+                    <td className="py-2.5 text-gray-300">{p.maleBeetleName} x {p.femaleBeetleName}</td>
+                    <td className="py-2.5 text-gray-500">{p.pairingDate}</td>
+                    <td className="py-2.5 text-right text-gray-400">{p.totalEggsLaid}</td>
+                    <td className="py-2.5 text-right text-gray-400">{p.hatchedEggs}</td>
+                    <td className="py-2.5 text-right text-emerald-400 font-medium">{p.emergedAdults}</td>
+                  </tr>
+                ))}
+                {recentPairings.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-4 text-center text-gray-600">No pairings recorded yet</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        {/* Pest Risk Inbox */}
+        <Card>
+          <CardHeader title="Pest Inbox" subtitle={`${openPestRisks.length} open`} action={
+            <button onClick={() => onNavigate('pest-risk')} className="text-xs text-sky-400 hover:text-sky-300 font-medium flex items-center gap-1">
+              All <ExternalLink className="w-3 h-3" />
+            </button>
+          } />
+          <div className="space-y-2.5">
+            {pestRisks.slice(0, 5).map((pr) => (
+              <div key={pr.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-800/50">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-xs text-gray-300 font-medium truncate">{pr.bottleId}</span>
+                  <Badge variant={severityVariant[pr.severity]}>{problemTypeLabel[pr.problemType]}</Badge>
+                </div>
+                <Badge variant={pr.status === 'open' ? 'danger' : 'success'}>
+                  {pr.status}
+                </Badge>
+              </div>
+            ))}
+            {pestRisks.length === 0 && (
+              <p className="text-xs text-gray-600 text-center py-4">No pest risks logged</p>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Quick Links */}
+      <Card>
+        <CardHeader title="Quick Actions" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: 'Add Beetle', page: 'add-beetle', icon: Bug },
+            { label: 'Log Growth', page: 'larval-growth', icon: Sprout },
+            { label: 'New Pairing', page: 'pairing', icon: HeartHandshake },
+            { label: 'Report Pest', page: 'pest-risk', icon: ShieldAlert },
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.page}
+                onClick={() => onNavigate(item.page)}
+                className="flex flex-col items-center gap-2 p-4 rounded-lg bg-gray-800/50 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 transition-colors"
+              >
+                <Icon className="w-5 h-5 text-sky-400" />
+                <span className="text-xs text-gray-400 font-medium">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}

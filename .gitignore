@@ -1,0 +1,22 @@
+# Dependencies & builds (app in project/)
+**/node_modules/
+**/.next/
+**/out/
+**/dist/
+
+# Secrets — never commit
+**/.env
+**/.env.local
+**/.env*.local
+**/*.local
+
+# Vercel
+**/.vercel/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Logs
+**/*.log
