@@ -10,8 +10,8 @@ interface SettingsProps {
   larvalCount: number;
   pairingCount: number;
   pestCount: number;
-  onClearAll: () => void;
-  onRestoreDemo: () => void;
+  onClearAll: () => void | Promise<void>;
+  onRestoreDemo: () => void | Promise<void>;
 }
 
 const CONFIRM_PHRASE = 'DELETE ALL';
@@ -52,11 +52,16 @@ export function Settings({
     <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-xl font-bold text-gray-100">Settings</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Manage your local breeding data stored in this browser</p>
+        <p className="text-sm text-gray-500 mt-0.5">
+          Beetles sync to your account; growth logs, pairings, and pest notes stay in this browser
+        </p>
       </div>
 
       <Card>
-        <CardHeader title="Your data" subtitle="Everything is saved on this device only (localStorage)" />
+        <CardHeader
+          title="Your data"
+          subtitle="Beetles in Supabase; other records in localStorage on this device"
+        />
         <div className="flex flex-wrap gap-2">
           <Badge variant="info">{beetleCount} beetles</Badge>
           <Badge variant="neutral">{larvalCount} growth records</Badge>

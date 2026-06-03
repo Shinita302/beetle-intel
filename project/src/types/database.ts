@@ -26,6 +26,14 @@ export interface BeetleProfileMeta {
   status?: string;
   generation?: string;
   stageNotes?: BeetleStageNotes;
+  source?: string;
+  emergenceDate?: string;
+  bloodline?: string;
+  fatherParent?: string;
+  motherParent?: string;
+  isBigHitter?: boolean;
+  adultSize?: number;
+  adultWeight?: number;
 }
 
 export function parseInventoryCounts(json: Json): BeetleInventoryCounts {

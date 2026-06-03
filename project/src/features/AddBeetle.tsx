@@ -15,8 +15,8 @@ import type { BeetleInventoryCounts } from '../types';
 
 interface AddBeetleProps {
   beetles: Beetle[];
-  onAdd: (beetle: Beetle) => void;
-  onUpdate: (beetle: Beetle) => void;
+  onAdd: (beetle: Beetle) => void | Promise<void>;
+  onUpdate: (beetle: Beetle) => void | Promise<void>;
 }
 
 const statusOptions: { value: BeetleStatus; label: string }[] = [
@@ -131,6 +131,7 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
   const [saved, setSaved] = useState(false);
   const [editBeetleId, setEditBeetleId] = useState('');
   const [editForm, setEditForm] = useState<FormState | null>(null);
+  const [editErrors, setEditErrors] = useState<FormErrors>({});
   const [editSaved, setEditSaved] = useState(false);
 
   const nextId = `B-${String(beetles.length + 1).padStart(3, '0')}`;
@@ -248,13 +249,48 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
     label: `${b.id} — ${b.name}`,
   }));
 
+  const updateEdit = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    setEditForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+    if (key === 'name' && editErrors.name) {
+      setEditErrors((prev) => ({ ...prev, name: undefined }));
+    }
+    if (key === 'sex' && editErrors.sex) {
+      setEditErrors((prev) => ({ ...prev, sex: undefined }));
+    }
+  };
+
+  const validateEdit = (): FormErrors => {
+    if (!editForm) return {};
+    const next: FormErrors = {};
+    if (!editForm.name.trim()) {
+      next.name = 'Beetle name is required.';
+    }
+    if (!editForm.sex) {
+      next.sex = 'Sex is required.';
+    }
+    return next;
+  };
+
   const handleEditSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingBeetle || !editForm) return;
 
+    const validationErrors = validateEdit();
+    if (Object.keys(validationErrors).length > 0) {
+      setEditErrors(validationErrors);
+      return;
+    }
+
     const isAdultEdit = editForm.status === 'adult';
     const updated: Beetle = {
       ...editingBeetle,
+      name: editForm.name.trim(),
+      species: editForm.species.trim(),
+      sex: editForm.sex as BeetleSex,
+      source: editForm.source.trim(),
+      generation: editForm.generation.trim(),
+      fatherParent: editForm.fatherParent.trim(),
+      motherParent: editForm.motherParent.trim(),
       instarWeights: { ...editForm.instarWeights },
       inventoryCounts: { ...editForm.inventoryCounts },
       larvalWeight: latestInstarWeight(editForm.instarWeights),
@@ -275,8 +311,20 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
     };
 
     onUpdate(updated);
+    setEditErrors({});
     setEditSaved(true);
     setTimeout(() => setEditSaved(false), 2000);
+  };
+
+  const pickEditParentFromBeetle = (beetleId: string, role: 'father' | 'mother') => {
+    const beetle = beetles.find((b) => b.id === beetleId);
+    if (!beetle) return;
+    const label = `${beetle.id} — ${beetle.name}`;
+    if (role === 'father') {
+      updateEdit('fatherParent', label);
+    } else {
+      updateEdit('motherParent', label);
+    }
   };
 
   const updateEditStageNote = (key: keyof BeetleStageNotes, value: string) => {
@@ -559,25 +607,183 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
         <Card>
           <CardHeader
             title="Edit beetle profile"
-            subtitle="Fix L1/L2/L3 weights and stage notes after import or growth tracking"
+            subtitle="Update name, sex, species, parents, counts, weights, and notes"
           />
           <form onSubmit={handleEditSave} noValidate>
             <FormField label="Select beetle">
               <SelectInput
                 value={editBeetleId}
-                onChange={setEditBeetleId}
+                onChange={(id) => {
+                  setEditBeetleId(id);
+                  setEditErrors({});
+                }}
                 options={beetleSelectOptions}
                 placeholder="Choose a beetle to edit…"
               />
             </FormField>
 
             {editForm && editingBeetle && (
-              <div className="mt-5 space-y-4">
+              <div className="mt-5 space-y-6">
                 <p className="text-xs text-gray-500">
                   Editing <span className="text-gray-300 font-medium">{editingBeetle.name}</span>{' '}
                   <span className="font-mono">({editingBeetle.id})</span>
                 </p>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField label="Beetle Name" required error={editErrors.name}>
+                    <TextInput
+                      value={editForm.name}
+                      onChange={(v) => updateEdit('name', v)}
+                      placeholder="e.g. Titan"
+                      invalid={Boolean(editErrors.name)}
+                    />
+                  </FormField>
+
+                  <FormField label="Species">
+                    <TextInput
+                      value={editForm.species}
+                      onChange={(v) => updateEdit('species', v)}
+                      placeholder="e.g. Dorcus titanus palawanicus"
+                    />
+                  </FormField>
+
+                  <FormField label="Sex" required error={editErrors.sex}>
+                    <SelectInput
+                      value={editForm.sex}
+                      onChange={(v) => updateEdit('sex', v as BeetleSex)}
+                      options={sexOptions}
+                      placeholder="Select sex…"
+                      invalid={Boolean(editErrors.sex)}
+                    />
+                  </FormField>
+
+                  <FormField label="Source / Seller">
+                    <TextInput
+                      value={editForm.source}
+                      onChange={(v) => updateEdit('source', v)}
+                      placeholder="e.g. BeetleKing JP"
+                    />
+                  </FormField>
+
+                  <FormField label="Generation">
+                    <TextInput
+                      value={editForm.generation}
+                      onChange={(v) => updateEdit('generation', v)}
+                      placeholder="e.g. F1, F2, F10+, CB, WC"
+                    />
+                  </FormField>
+
+                  <FormField label="Status">
+                    <SelectInput
+                      value={editForm.status}
+                      onChange={(v) => updateEdit('status', v as BeetleStatus)}
+                      options={statusOptions}
+                    />
+                  </FormField>
+
+                  {editForm.status === 'adult' && (
+                    <>
+                      <FormField label="Emergence Date" hint="Date when the beetle emerged from pupa to adult.">
+                        <TextInput
+                          type="date"
+                          value={editForm.emergenceDate}
+                          onChange={(v) => updateEdit('emergenceDate', v)}
+                        />
+                      </FormField>
+
+                      <FormField label="Adult Size (mm)">
+                        <NumberInput
+                          value={editForm.adultSize}
+                          onChange={(v) => updateEdit('adultSize', v)}
+                          step={1}
+                          min={0}
+                        />
+                      </FormField>
+
+                      <FormField label="Adult Weight (g)">
+                        <NumberInput
+                          value={editForm.adultWeight}
+                          onChange={(v) => updateEdit('adultWeight', v)}
+                          step={0.5}
+                          min={0}
+                        />
+                      </FormField>
+                    </>
+                  )}
+
+                  <FormField label="Bloodline" className="md:col-span-2">
+                    <TextInput
+                      value={editForm.bloodline}
+                      onChange={(v) => updateEdit('bloodline', v)}
+                      placeholder="e.g. Gold Ridge"
+                    />
+                  </FormField>
+                </div>
+
+                <div className="pt-4 border-t border-gray-800">
+                  <h3 className="text-sm font-semibold text-gray-200 mb-1">Parent Pair</h3>
+                  <p className="text-xs text-gray-500 mb-4">Record the male and female parents for this beetle.</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField label="Father / Male Parent">
+                      {maleBeetleOptions.length > 0 && (
+                        <div className="mb-2">
+                          <SelectInput
+                            value=""
+                            onChange={(v) => pickEditParentFromBeetle(v, 'father')}
+                            options={maleBeetleOptions}
+                            placeholder="Pick from collection (optional)"
+                          />
+                        </div>
+                      )}
+                      <TextInput
+                        value={editForm.fatherParent}
+                        onChange={(v) => updateEdit('fatherParent', v)}
+                        placeholder="e.g. B-001 — Titan or wild male"
+                      />
+                    </FormField>
+
+                    <FormField label="Mother / Female Parent">
+                      {femaleBeetleOptions.length > 0 && (
+                        <div className="mb-2">
+                          <SelectInput
+                            value=""
+                            onChange={(v) => pickEditParentFromBeetle(v, 'mother')}
+                            options={femaleBeetleOptions}
+                            placeholder="Pick from collection (optional)"
+                          />
+                        </div>
+                      )}
+                      <TextInput
+                        value={editForm.motherParent}
+                        onChange={(v) => updateEdit('motherParent', v)}
+                        placeholder="e.g. B-003 — Valkyrie or wild female"
+                      />
+                    </FormField>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-gray-800">
+                  <FormField label="Featured breeder">
+                    <button
+                      type="button"
+                      onClick={() => updateEdit('isBigHitter', !editForm.isBigHitter)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                        editForm.isBigHitter
+                          ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                          : 'bg-gray-800/50 border-gray-700 text-gray-500'
+                      }`}
+                    >
+                      <Star className="w-3.5 h-3.5" />
+                      {editForm.isBigHitter ? 'Featured' : 'Mark as Big Hitter'}
+                    </button>
+                  </FormField>
+                </div>
+
+                <div className="pt-4 border-t border-gray-800">
+                  <h3 className="text-sm font-semibold text-gray-200 mb-1">Inventory counts</h3>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Head counts per stage (e.g. spreadsheet row L1 106). Plain numbers without g/mm stay here.
+                  </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                   {inventoryFields.map(({ key, label }) => (
                     <FormField key={key} label={`${label} count`}>
@@ -590,8 +796,10 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
                     </FormField>
                   ))}
                 </div>
+                </div>
 
                 <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-gray-200">Larval weights & notes</h3>
                   {larvalInstarFields.map(({ key, label }) => (
                     <div
                       key={key}

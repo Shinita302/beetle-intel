@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {
   LayoutDashboard,
   Bug,
@@ -9,6 +10,9 @@ import {
   Menu,
   X,
 } from 'lucide-react';
+import { PAGE_ROUTES, pathnameToPage } from '@/lib/dashboardRoutes';
+
+export { pathnameToPage };
 
 export type Page =
   | 'dashboard'
@@ -74,8 +78,9 @@ export function Sidebar({ currentPage, onNavigate, mobileOpen, onCloseMobile }: 
             const active = currentPage === item.id;
             const Icon = item.icon;
             return (
-              <button
+              <Link
                 key={item.id}
+                href={PAGE_ROUTES[item.id]}
                 onClick={() => {
                   onNavigate(item.id);
                   onCloseMobile();
@@ -88,7 +93,7 @@ export function Sidebar({ currentPage, onNavigate, mobileOpen, onCloseMobile }: 
               >
                 <Icon className="w-4 h-4" />
                 {item.label}
-              </button>
+              </Link>
             );
           })}
         </nav>

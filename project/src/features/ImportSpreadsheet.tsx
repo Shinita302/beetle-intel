@@ -31,7 +31,7 @@ import {
 interface ImportSpreadsheetProps {
   beetles: Beetle[];
   larvalRecords: LarvalRecord[];
-  onImportConfirmed: (payload: { beetles: Beetle[]; larvalRecords: LarvalRecord[] }) => void;
+  onImportConfirmed: (payload: { beetles: Beetle[]; larvalRecords: LarvalRecord[] }) => void | Promise<void>;
 }
 
 type ImportStep = 'interpret' | 'generate' | 'import';

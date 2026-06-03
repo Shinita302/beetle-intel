@@ -1,21 +1,18 @@
-import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
-import { fetchUserBeetles } from '@/lib/beetles';
-import DashboardClient from './DashboardClient';
+'use client';
 
-export const dynamic = 'force-dynamic';
+import { Dashboard } from '@/features/Dashboard';
+import { useBeetleApp } from '@/contexts/BeetleAppContext';
 
-export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export default function DashboardPage() {
+  const { beetles, larvalRecords, pairings, pestRisks, navigate } = useBeetleApp();
 
-  if (!user) {
-    redirect('/login');
-  }
-
-  const beetles = await fetchUserBeetles(supabase, user.id);
-
-  return <DashboardClient beetles={beetles} userEmail={user.email} />;
+  return (
+    <Dashboard
+      beetles={beetles}
+      larvalRecords={larvalRecords}
+      pairings={pairings}
+      pestRisks={pestRisks}
+      onNavigate={navigate}
+    />
+  );
 }

@@ -8,3 +8,7 @@ export const STORAGE_KEYS = {
 } as const;
 
 export const ALL_STORAGE_KEYS = Object.values(STORAGE_KEYS);
+
+export function userStorageKey(baseKey: string, userId: string): string {
+  return `${baseKey}:${userId}`;
+}
