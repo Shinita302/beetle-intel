@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { AuthButton, AuthError, AuthField, AuthShell } from '@/components/auth/AuthShell';
+import { getAuthCallbackUrl } from '@/lib/authRedirect';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginClient() {
@@ -45,7 +46,7 @@ export default function LoginClient() {
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+        redirectTo: getAuthCallbackUrl(),
       },
     });
     if (oauthError) {
@@ -62,7 +63,7 @@ export default function LoginClient() {
     setLoading(true);
     const supabase = createClient();
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+      redirectTo: getAuthCallbackUrl(),
     });
     setLoading(false);
     if (resetError) {
