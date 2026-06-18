@@ -1,3 +1,7 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+
 interface FormFieldProps {
   label: string;
   children: React.ReactNode;
@@ -101,6 +105,19 @@ export function SelectInput({
   );
 }
 
+function formatNumberDisplay(value: number | string): string {
+  const n = typeof value === 'number' ? value : parseFloat(String(value));
+  if (Number.isNaN(n) || n === 0) return '';
+  return String(n);
+}
+
+function clampNumber(n: number, min?: number, max?: number): number {
+  let result = n;
+  if (min !== undefined) result = Math.max(min, result);
+  if (max !== undefined) result = Math.min(max, result);
+  return result;
+}
+
 export function NumberInput({
   value,
   onChange,
@@ -118,12 +135,54 @@ export function NumberInput({
   step?: number;
   required?: boolean;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [text, setText] = useState(() => formatNumberDisplay(value));
+
+  useEffect(() => {
+    if (document.activeElement === inputRef.current) return;
+    setText(formatNumberDisplay(value));
+  }, [value]);
+
+  const commit = (raw: string) => {
+    if (raw === '' || raw === '-') {
+      onChange(0);
+      setText('');
+      return;
+    }
+
+    const parsed = parseFloat(raw);
+    if (Number.isNaN(parsed)) {
+      onChange(0);
+      setText('');
+      return;
+    }
+
+    const final = clampNumber(parsed, min, max);
+    onChange(final);
+    setText(final === 0 ? '' : String(final));
+  };
+
   return (
     <input
+      ref={inputRef}
       type="number"
-      value={value}
-      onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-      placeholder={placeholder}
+      value={text}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setText(raw);
+
+        if (raw === '' || raw === '-') {
+          onChange(0);
+          return;
+        }
+
+        const parsed = parseFloat(raw);
+        if (!Number.isNaN(parsed)) {
+          onChange(clampNumber(parsed, min, max));
+        }
+      }}
+      onBlur={() => commit(text)}
+      placeholder={placeholder ?? '0'}
       min={min}
       max={max}
       step={step}
