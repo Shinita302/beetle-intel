@@ -7,12 +7,19 @@ export function getSupabaseUrl(): string {
     const parsed = new URL(raw);
     return parsed.origin;
   } catch {
-    return raw.replace(/\/auth\/v1\/?$/i, '').replace(/\/+$/, '');
+    return raw
+      .replace(/\/auth\/v1\/?$/i, '')
+      .replace(/\/rest\/v1\/?$/i, '')
+      .replace(/\/+$/, '');
   }
 }
 
 export function getSupabaseAnonKey(): string {
-  return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? '';
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+    ''
+  );
 }
 
 /** True when real Supabase credentials are present (not placeholders). */
@@ -27,12 +34,6 @@ export function isSupabaseConfigured(): boolean {
   if (!url.startsWith('https://') || !url.includes('supabase.co')) return false;
   if (key.startsWith('sb_secret_') || key.includes('service_role')) return false;
   if (key.length < 20) return false;
-  const validKey =
-    key.startsWith('eyJ') ||
-    key.startsWith('sb_publishable_') ||
-    key.startsWith('sbp_') ||
-    key.startsWith('sb_');
-  if (!validKey) return false;
 
   return true;
 }

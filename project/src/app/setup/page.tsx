@@ -10,6 +10,10 @@ export default function SetupPage() {
           <p className="text-sm text-gray-400 mt-2">
             The app needs your Supabase project URL and anon key before login or beetle storage will work.
           </p>
+          <p className="text-sm text-amber-200/90 mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+            On <strong>Vercel</strong>, add these in <strong>Settings → Environment Variables</strong> (not only
+            .env.local), enable <strong>Production</strong>, then <strong>Redeploy</strong>.
+          </p>
         </div>
 
         <ol className="text-sm text-gray-300 space-y-3 list-decimal list-inside">
@@ -32,11 +36,12 @@ export default function SetupPage() {
             key (<code className="text-xs text-gray-500">sb_publishable_…</code> or <code className="text-xs text-gray-500">eyJ…</code>)
           </li>
           <li>
-            Edit{' '}
+            <strong className="text-gray-200">Vercel:</strong> add the two variables below under{' '}
+            <strong className="text-gray-200">Environment Variables</strong>, or edit{' '}
             <code className="text-amber-200/90 bg-gray-800 px-1.5 py-0.5 rounded text-xs">
               project/.env.local
             </code>{' '}
-            and replace the placeholders
+            for local dev only
           </li>
           <li>
             Run the SQL in{' '}
