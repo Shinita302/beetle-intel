@@ -40,8 +40,18 @@ export type SpeciesInventoryStageKey = keyof Pick<
   'eggs' | 'l1' | 'l2' | 'l3' | 'prePupa' | 'pupa' | 'adult'
 >;
 
+/** Stable id from full species name (one row per species). */
+export function speciesInventoryId(species: string): string {
+  const slug = species
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug ? `INV-${slug}` : `INV-${Date.now()}`;
+}
+
 export const emptySpeciesInventory = (species: string, id = ''): SpeciesInventory => ({
-  id,
+  id: id || speciesInventoryId(species),
   species,
   eggs: 0,
   l1: 0,

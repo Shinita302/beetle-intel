@@ -79,7 +79,7 @@ function mergeDraftInventory(
 ) {
   const key = species.trim();
   if (!key) return;
-  const row = map.get(key.toLowerCase()) ?? emptySpeciesInventory(key, `INV-${key.slice(0, 8)}`);
+  const row = map.get(key.toLowerCase()) ?? emptySpeciesInventory(key);
   row.eggs += counts.eggs;
   row.l1 += counts.l1;
   row.l2 += counts.l2;

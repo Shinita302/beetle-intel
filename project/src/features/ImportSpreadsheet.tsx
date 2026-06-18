@@ -462,7 +462,7 @@ export function ImportSpreadsheet({ beetles, growthEntries, onImportConfirmed }:
                 </thead>
                 <tbody>
                   {generated.speciesInventory.map((row) => (
-                    <tr key={row.id} className="border-b border-gray-800/50">
+                    <tr key={row.species} className="border-b border-gray-800/50">
                       <td className="py-2 px-3 text-gray-200">{row.species}</td>
                       <td className="py-2 px-3 text-right text-gray-400">{row.eggs || '—'}</td>
                       <td className="py-2 px-3 text-right text-gray-400">{row.l1 || '—'}</td>

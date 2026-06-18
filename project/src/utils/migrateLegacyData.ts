@@ -1,5 +1,5 @@
 import type { GrowthEntry, GrowthStage, Pairing, SpeciesInventory } from '@/types';
-import { emptySpeciesInventory } from '@/types';
+import { emptySpeciesInventory, speciesInventoryId } from '@/types';
 import type { DbBeetle } from '@/types/database';
 import { parseLegacyInventoryCounts } from '@/types/database';
 
@@ -44,11 +44,47 @@ export function normalizePairings(raw: unknown[]): Pairing[] {
   return raw.map((item) => normalizePairing(item as Record<string, unknown>));
 }
 
+/** Merge rows by species name and assign stable unique ids. */
+export function normalizeSpeciesInventory(rows: SpeciesInventory[]): SpeciesInventory[] {
+  const map = new Map<string, SpeciesInventory>();
+
+  for (const row of rows) {
+    const species = row.species.trim();
+    if (!species) continue;
+
+    const key = species.toLowerCase();
+    const current = map.get(key);
+
+    if (!current) {
+      map.set(key, {
+        ...row,
+        species,
+        id: speciesInventoryId(species),
+      });
+      continue;
+    }
+
+    current.eggs += row.eggs;
+    current.l1 += row.l1;
+    current.l2 += row.l2;
+    current.l3 += row.l3;
+    current.prePupa += row.prePupa;
+    current.pupa += row.pupa;
+    current.adult += row.adult;
+    if (row.updatedAt >= current.updatedAt) {
+      current.updatedAt = row.updatedAt;
+    }
+  }
+
+  return Array.from(map.values());
+}
+
 export function migrateDbRowsToSpeciesInventory(
   rows: DbBeetle[],
   existing: SpeciesInventory[]
 ): SpeciesInventory[] {
-  if (existing.length > 0) return existing;
+  const deduped = normalizeSpeciesInventory(existing);
+  if (deduped.length > 0) return deduped;
 
   const bySpecies = new Map<string, SpeciesInventory>();
 
@@ -60,7 +96,7 @@ export function migrateDbRowsToSpeciesInventory(
     const species = row.species.trim();
     if (!species) continue;
 
-    const current = bySpecies.get(species) ?? emptySpeciesInventory(species, `INV-${species.slice(0, 8)}`);
+    const current = bySpecies.get(species) ?? emptySpeciesInventory(species);
     current.eggs += counts.egg;
     current.l1 += counts.l1;
     current.l2 += counts.l2;
@@ -78,24 +114,5 @@ export function mergeSpeciesInventory(
   existing: SpeciesInventory[],
   incoming: SpeciesInventory[]
 ): SpeciesInventory[] {
-  const map = new Map(existing.map((row) => [row.species.toLowerCase(), { ...row }]));
-
-  for (const row of incoming) {
-    const key = row.species.toLowerCase();
-    const current = map.get(key);
-    if (!current) {
-      map.set(key, { ...row });
-      continue;
-    }
-    current.eggs += row.eggs;
-    current.l1 += row.l1;
-    current.l2 += row.l2;
-    current.l3 += row.l3;
-    current.prePupa += row.prePupa;
-    current.pupa += row.pupa;
-    current.adult += row.adult;
-    current.updatedAt = row.updatedAt;
-  }
-
-  return Array.from(map.values());
+  return normalizeSpeciesInventory([...existing, ...incoming]);
 }

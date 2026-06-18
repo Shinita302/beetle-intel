@@ -108,7 +108,21 @@ export function SelectInput({
 function formatNumberDisplay(value: number | string): string {
   const n = typeof value === 'number' ? value : parseFloat(String(value));
   if (Number.isNaN(n) || n === 0) return '';
-  return String(n);
+  return Number.isInteger(n) ? String(n) : String(n);
+}
+
+function parseNumberInput(raw: string, integersOnly: boolean): number | null {
+  const trimmed = raw.trim();
+  if (trimmed === '' || trimmed === '-') return null;
+
+  if (integersOnly) {
+    if (!/^\d+$/.test(trimmed)) return null;
+    return parseInt(trimmed, 10);
+  }
+
+  if (!/^\d*\.?\d+$/.test(trimmed)) return null;
+  const parsed = parseFloat(trimmed);
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 function clampNumber(n: number, min?: number, max?: number): number {
@@ -137,6 +151,7 @@ export function NumberInput({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(() => formatNumberDisplay(value));
+  const integersOnly = step === 1 && min === 0;
 
   useEffect(() => {
     if (document.activeElement === inputRef.current) return;
@@ -144,14 +159,8 @@ export function NumberInput({
   }, [value]);
 
   const commit = (raw: string) => {
-    if (raw === '' || raw === '-') {
-      onChange(0);
-      setText('');
-      return;
-    }
-
-    const parsed = parseFloat(raw);
-    if (Number.isNaN(parsed)) {
+    const parsed = parseNumberInput(raw, integersOnly);
+    if (parsed === null) {
       onChange(0);
       setText('');
       return;
@@ -159,25 +168,29 @@ export function NumberInput({
 
     const final = clampNumber(parsed, min, max);
     onChange(final);
-    setText(final === 0 ? '' : String(final));
+    setText(final === 0 ? '' : formatNumberDisplay(final));
   };
 
   return (
     <input
       ref={inputRef}
-      type="number"
+      type="text"
+      inputMode={integersOnly ? 'numeric' : 'decimal'}
       value={text}
       onChange={(e) => {
         const raw = e.target.value;
-        setText(raw);
-
-        if (raw === '' || raw === '-') {
+        if (raw === '') {
+          setText('');
           onChange(0);
           return;
         }
 
-        const parsed = parseFloat(raw);
-        if (!Number.isNaN(parsed)) {
+        if (integersOnly && !/^\d*$/.test(raw)) return;
+        if (!integersOnly && !/^\d*\.?\d*$/.test(raw)) return;
+
+        setText(raw);
+        const parsed = parseNumberInput(raw, integersOnly);
+        if (parsed !== null) {
           onChange(clampNumber(parsed, min, max));
         }
       }}

@@ -18,6 +18,7 @@ import {
   mergeSpeciesInventory,
   normalizeGrowthEntries,
   normalizePairings,
+  normalizeSpeciesInventory,
 } from '@/utils/migrateLegacyData';
 import {
   mockBeetles,
@@ -253,14 +254,19 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
       updateBeetle,
       addGrowthEntry: (entry) => setGrowthEntries((prev) => [entry, ...prev]),
       addGrowthEntries: (entries) => setGrowthEntries((prev) => [...entries, ...prev]),
-      updateSpeciesInventory: (rows) => setSpeciesInventory(rows),
+      updateSpeciesInventory: (rows) => setSpeciesInventory(normalizeSpeciesInventory(rows)),
       upsertSpeciesInventory: (row) =>
         setSpeciesInventory((prev) => {
-          const index = prev.findIndex((r) => r.species.toLowerCase() === row.species.toLowerCase());
-          if (index === -1) return [row, ...prev];
+          const species = row.species.trim();
+          if (!species) return prev;
+          const normalized = { ...row, species };
+          const index = prev.findIndex((r) => r.species.trim().toLowerCase() === species.toLowerCase());
+          if (index === -1) {
+            return normalizeSpeciesInventory([normalized, ...prev]);
+          }
           const next = [...prev];
-          next[index] = row;
-          return next;
+          next[index] = { ...next[index], ...normalized, id: next[index].id };
+          return normalizeSpeciesInventory(next);
         }),
       addPairing: (pairing) => setPairings((prev) => [pairing, ...prev]),
       addPestRisk: (risk) => setPestRisks((prev) => [risk, ...prev]),

@@ -109,7 +109,7 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
   const addSpecies = () => {
     const species = newSpecies.trim();
     if (!species) return;
-    const row = emptySpeciesInventory(species, `INV-${Date.now()}`);
+    const row = emptySpeciesInventory(species);
     onUpsert(row);
     setNewSpecies('');
     setShowAdd(false);
@@ -230,7 +230,7 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
             </thead>
             <tbody>
               {pageRows.map((row) => (
-                <tr key={row.id} className="border-b border-gray-800/50 hover:bg-gray-900/40">
+                <tr key={row.species} className="border-b border-gray-800/50 hover:bg-gray-900/40">
                   <td className="py-2.5 pr-3 text-gray-200 font-medium max-w-[200px] truncate" title={row.species}>
                     {row.species}
                   </td>
