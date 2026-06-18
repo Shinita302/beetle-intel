@@ -9,6 +9,7 @@ import {
   Settings,
   Menu,
   X,
+  Package,
 } from 'lucide-react';
 import { PAGE_ROUTES, pathnameToPage } from '@/lib/dashboardRoutes';
 
@@ -17,6 +18,7 @@ export { pathnameToPage };
 export type Page =
   | 'dashboard'
   | 'add-beetle'
+  | 'inventory'
   | 'import-spreadsheet'
   | 'larval-growth'
   | 'pairing'
@@ -26,8 +28,9 @@ export type Page =
 const navItems: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'add-beetle', label: 'Add Beetle', icon: Bug },
+  { id: 'inventory', label: 'Inventory', icon: Package },
   { id: 'import-spreadsheet', label: 'Import Spreadsheet', icon: FileSpreadsheet },
-  { id: 'larval-growth', label: 'Larval Growth', icon: Sprout },
+  { id: 'larval-growth', label: 'Growth Tracking', icon: Sprout },
   { id: 'pairing', label: 'Pairing & Fertility', icon: HeartHandshake },
   { id: 'pest-risk', label: 'Pest Risk', icon: ShieldAlert },
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -43,7 +46,6 @@ interface SidebarProps {
 export function Sidebar({ currentPage, onNavigate, mobileOpen, onCloseMobile }: SidebarProps) {
   return (
     <>
-      {/* Mobile overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black/60 z-40 lg:hidden"
@@ -56,7 +58,6 @@ export function Sidebar({ currentPage, onNavigate, mobileOpen, onCloseMobile }: 
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Brand */}
         <div className="px-5 py-5 border-b border-gray-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-gradient-to-br from-sky-500 to-teal-500 rounded-lg flex items-center justify-center">
@@ -72,7 +73,6 @@ export function Sidebar({ currentPage, onNavigate, mobileOpen, onCloseMobile }: 
           </button>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const active = currentPage === item.id;
@@ -98,9 +98,8 @@ export function Sidebar({ currentPage, onNavigate, mobileOpen, onCloseMobile }: 
           })}
         </nav>
 
-        {/* Footer */}
         <div className="px-5 py-4 border-t border-gray-800">
-          <p className="text-[10px] text-gray-600">v1.0 MVP</p>
+          <p className="text-[10px] text-gray-600">v1.1</p>
         </div>
       </aside>
     </>

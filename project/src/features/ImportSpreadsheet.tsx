@@ -12,7 +12,7 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { FormField, SelectInput, TextInput } from '../components/ui/FormField';
-import type { Beetle, LarvalRecord } from '../types';
+import type { Beetle, GrowthEntry } from '../types';
 import {
   parseSpreadsheet,
   interpretRawRows,
@@ -30,8 +30,12 @@ import {
 
 interface ImportSpreadsheetProps {
   beetles: Beetle[];
-  larvalRecords: LarvalRecord[];
-  onImportConfirmed: (payload: { beetles: Beetle[]; larvalRecords: LarvalRecord[] }) => void | Promise<void>;
+  growthEntries: GrowthEntry[];
+  onImportConfirmed: (payload: {
+    beetles: Beetle[];
+    growthEntries: GrowthEntry[];
+    speciesInventory?: import('../types').SpeciesInventory[];
+  }) => void | Promise<void>;
 }
 
 type ImportStep = 'interpret' | 'generate' | 'import';
@@ -51,7 +55,7 @@ function meaningBadgeVariant(meaning: RowMeaning): 'info' | 'warning' | 'neutral
   return 'neutral';
 }
 
-export function ImportSpreadsheet({ beetles, larvalRecords, onImportConfirmed }: ImportSpreadsheetProps) {
+export function ImportSpreadsheet({ beetles, growthEntries, onImportConfirmed }: ImportSpreadsheetProps) {
   const [step, setStep] = useState<ImportStep>('interpret');
   const [fileName, setFileName] = useState('');
   const [parsedSheet, setParsedSheet] = useState<ParsedSpreadsheet | null>(null);
@@ -150,7 +154,7 @@ export function ImportSpreadsheet({ beetles, larvalRecords, onImportConfirmed }:
     const result = generateRecordsFromConfirmed({
       interpreted: interpretedRows,
       existingBeetles: beetles,
-      existingLarvalRecords: larvalRecords,
+      existingGrowthEntries: growthEntries,
     });
     setGenerated(result);
     setStep('generate');
@@ -161,7 +165,8 @@ export function ImportSpreadsheet({ beetles, larvalRecords, onImportConfirmed }:
     if (!generated || !confirmed) return;
     onImportConfirmed({
       beetles: generated.beetles,
-      larvalRecords: generated.larvalRecords,
+      growthEntries: generated.growthEntries,
+      speciesInventory: generated.speciesInventory,
     });
     setImported(true);
     setStep('import');
@@ -368,8 +373,9 @@ export function ImportSpreadsheet({ beetles, larvalRecords, onImportConfirmed }:
           />
           <div className="flex flex-wrap gap-2 mb-4">
             <Badge variant="success">{generated.summary.importedBeetles} beetle profiles</Badge>
-            <Badge variant="neutral">{generated.stageRecords.length} stage rows merged into profiles</Badge>
-            <Badge variant="info">{generated.summary.importedLarvalRecords} larval check-ins</Badge>
+            <Badge variant="neutral">{generated.stageRecords.length} stage rows parsed</Badge>
+            <Badge variant="info">{generated.summary.importedGrowthEntries} growth entries</Badge>
+            <Badge variant="info">{generated.summary.importedSpecies} species inventory rows</Badge>
             <Badge variant="neutral">{generated.summary.skippedRows} rows skipped</Badge>
           </div>
 
@@ -421,13 +427,7 @@ export function ImportSpreadsheet({ beetles, larvalRecords, onImportConfirmed }:
                   <th className="text-left py-2 px-3 text-gray-500">Species</th>
                   <th className="text-left py-2 px-3 text-gray-500">Sex</th>
                   <th className="text-left py-2 px-3 text-gray-500">Status</th>
-                  <th className="text-left py-2 px-3 text-gray-500">L1 #</th>
-                  <th className="text-left py-2 px-3 text-gray-500">L2 #</th>
-                  <th className="text-left py-2 px-3 text-gray-500">L3 #</th>
-                  <th className="text-left py-2 px-3 text-gray-500">Adult #</th>
-                  <th className="text-left py-2 px-3 text-gray-500">Growth (g)</th>
-                  <th className="text-left py-2 px-3 text-gray-500">Stage notes</th>
-                  <th className="text-left py-2 px-3 text-gray-500">Adult Notes</th>
+                  <th className="text-left py-2 px-3 text-gray-500">Notes</th>
                 </tr>
               </thead>
               <tbody>
@@ -438,27 +438,43 @@ export function ImportSpreadsheet({ beetles, larvalRecords, onImportConfirmed }:
                     <td className="py-2 px-3 text-gray-400">{b.species || '—'}</td>
                     <td className="py-2 px-3 text-gray-400">{b.sex}</td>
                     <td className="py-2 px-3 text-gray-400">{b.status}</td>
-                    <td className="py-2 px-3 text-gray-400">{b.inventoryCounts.l1 || '—'}</td>
-                    <td className="py-2 px-3 text-gray-400">{b.inventoryCounts.l2 || '—'}</td>
-                    <td className="py-2 px-3 text-gray-400">{b.inventoryCounts.l3 || '—'}</td>
-                    <td className="py-2 px-3 text-gray-400">{b.inventoryCounts.adult || '—'}</td>
-                    <td className="py-2 px-3 text-gray-400">
-                      {[b.instarWeights.l1, b.instarWeights.l2, b.instarWeights.l3]
-                        .filter((w) => w > 0)
-                        .map((w) => `${w}g`)
-                        .join(' · ') || '—'}
-                    </td>
-                    <td className="py-2 px-3 text-gray-500 max-w-[160px] truncate" title={[b.stageNotes.l1, b.stageNotes.l2, b.stageNotes.l3].filter(Boolean).join(' | ')}>
-                      {[b.stageNotes.l1, b.stageNotes.l2, b.stageNotes.l3].filter(Boolean).join(' · ') || '—'}
-                    </td>
-                    <td className="py-2 px-3 text-gray-500 max-w-[140px] truncate" title={b.stageNotes.adult}>
-                      {b.stageNotes.adult || '—'}
+                    <td className="py-2 px-3 text-gray-500 max-w-[200px] truncate" title={b.notes}>
+                      {b.notes || '—'}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {generated.speciesInventory.length > 0 && (
+            <div className="overflow-x-auto border border-gray-800 rounded-lg mb-4">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-900 border-b border-gray-800">
+                    <th className="text-left py-2 px-3 text-gray-500">Species</th>
+                    <th className="text-right py-2 px-3 text-gray-500">Eggs</th>
+                    <th className="text-right py-2 px-3 text-gray-500">L1</th>
+                    <th className="text-right py-2 px-3 text-gray-500">L2</th>
+                    <th className="text-right py-2 px-3 text-gray-500">L3</th>
+                    <th className="text-right py-2 px-3 text-gray-500">Adult</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {generated.speciesInventory.map((row) => (
+                    <tr key={row.id} className="border-b border-gray-800/50">
+                      <td className="py-2 px-3 text-gray-200">{row.species}</td>
+                      <td className="py-2 px-3 text-right text-gray-400">{row.eggs || '—'}</td>
+                      <td className="py-2 px-3 text-right text-gray-400">{row.l1 || '—'}</td>
+                      <td className="py-2 px-3 text-right text-gray-400">{row.l2 || '—'}</td>
+                      <td className="py-2 px-3 text-right text-gray-400">{row.l3 || '—'}</td>
+                      <td className="py-2 px-3 text-right text-gray-400">{row.adult || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           {generated.beetles.length > 25 && (
             <p className="text-[11px] text-gray-500 mb-4">Showing first 25 of {generated.beetles.length} beetles.</p>
           )}

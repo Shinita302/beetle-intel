@@ -1,4 +1,4 @@
-import type { BeetleInventoryCounts } from '../types';
+import type { SpeciesInventoryStageKey } from '../types';
 import type { LifecycleStage } from '../types/lifecycle';
 
 export type StageValueKind = 'count' | 'weight' | 'size' | 'unknown';
@@ -259,8 +259,8 @@ function stageLabelToLifecycle(label: string): 'egg' | 'L1' | 'L2' | 'L3' | 'pup
 
 export function inventoryKeyForLifecycle(
   stage: LifecycleStage
-): keyof BeetleInventoryCounts | null {
-  if (stage === 'egg') return 'egg';
+): SpeciesInventoryStageKey | null {
+  if (stage === 'egg') return 'eggs';
   if (stage === 'L1') return 'l1';
   if (stage === 'L2') return 'l2';
   if (stage === 'L3') return 'l3';

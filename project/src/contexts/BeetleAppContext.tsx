@@ -1,15 +1,4 @@
-'use client';
-
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
-import { useRouter } from 'next/navigation';
-import type { Beetle, LarvalRecord, Pairing, PestRisk } from '@/types';
+import type { Beetle, GrowthEntry, Pairing, PestRisk, SpeciesInventory } from '@/types';
 import type { DbBeetle } from '@/types/database';
 import { dbBeetleToBeetle, dbBeetlesToBeetles } from '@/lib/beetleDbMapper';
 import {
@@ -22,25 +11,54 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { STORAGE_KEYS, userStorageKey } from '@/constants/storageKeys';
 import { pageToPath } from '@/lib/dashboardRoutes';
 import { clearAllAppDataFromStorage } from '@/utils/clearAppData';
-import { mockBeetles, mockLarvalRecords, mockPairings, mockPestRisks } from '@/data/mockData';
+import {
+  migrateDbRowsToSpeciesInventory,
+  mergeSpeciesInventory,
+  normalizeGrowthEntries,
+  normalizePairings,
+} from '@/utils/migrateLegacyData';
+import {
+  mockBeetles,
+  mockGrowthEntries,
+  mockPairings,
+  mockPestRisks,
+  mockSpeciesInventory,
+} from '@/data/mockData';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import { useRouter } from 'next/navigation';
 
 interface BeetleAppContextValue {
   userId: string;
   userEmail: string | undefined;
   beetles: Beetle[];
-  larvalRecords: LarvalRecord[];
+  growthEntries: GrowthEntry[];
+  speciesInventory: SpeciesInventory[];
   pairings: Pairing[];
   pestRisks: PestRisk[];
   dataError: string;
   busy: boolean;
   addBeetle: (beetle: Beetle) => Promise<void>;
   updateBeetle: (beetle: Beetle) => Promise<void>;
-  addLarvalRecord: (record: LarvalRecord) => void;
-  addLarvalRecords: (records: LarvalRecord[]) => void;
+  addGrowthEntry: (entry: GrowthEntry) => void;
+  addGrowthEntries: (entries: GrowthEntry[]) => void;
+  updateSpeciesInventory: (rows: SpeciesInventory[]) => void;
+  upsertSpeciesInventory: (row: SpeciesInventory) => void;
   addPairing: (pairing: Pairing) => void;
   addPestRisk: (risk: PestRisk) => void;
   updatePestRisk: (risk: PestRisk) => void;
-  importData: (payload: { beetles: Beetle[]; larvalRecords: LarvalRecord[] }) => Promise<void>;
+  importData: (payload: {
+    beetles: Beetle[];
+    growthEntries: GrowthEntry[];
+    speciesInventory?: SpeciesInventory[];
+  }) => Promise<void>;
   clearAllData: () => Promise<void>;
   restoreDemoData: () => Promise<void>;
   navigate: (page: string) => void;
@@ -55,14 +73,52 @@ interface BeetleAppProviderProps {
   children: ReactNode;
 }
 
+function readLegacyGrowthEntries(userId: string): GrowthEntry[] {
+  if (typeof window === 'undefined') return [];
+  const growthKey = userStorageKey(STORAGE_KEYS.growthEntries, userId);
+  const stored = window.localStorage.getItem(growthKey);
+  if (stored) {
+    try {
+      return normalizeGrowthEntries(JSON.parse(stored));
+    } catch {
+      return [];
+    }
+  }
+
+  const legacyKey = userStorageKey(STORAGE_KEYS.larvalRecords, userId);
+  const legacy = window.localStorage.getItem(legacyKey);
+  if (!legacy) return [];
+  try {
+    return normalizeGrowthEntries(JSON.parse(legacy));
+  } catch {
+    return [];
+  }
+}
+
+function readLegacyPairings(userId: string): Pairing[] {
+  if (typeof window === 'undefined') return [];
+  const key = userStorageKey(STORAGE_KEYS.pairings, userId);
+  const stored = window.localStorage.getItem(key);
+  if (!stored) return [];
+  try {
+    return normalizePairings(JSON.parse(stored));
+  } catch {
+    return [];
+  }
+}
+
 export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, children }: BeetleAppProviderProps) {
   const router = useRouter();
   const [beetles, setBeetles] = useState<Beetle[]>(() => dbBeetlesToBeetles(initialDbBeetles));
   const [dataError, setDataError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const [larvalRecords, setLarvalRecords] = useLocalStorage<LarvalRecord[]>(
-    userStorageKey(STORAGE_KEYS.larvalRecords, userId),
+  const [growthEntries, setGrowthEntries] = useLocalStorage<GrowthEntry[]>(
+    userStorageKey(STORAGE_KEYS.growthEntries, userId),
+    []
+  );
+  const [speciesInventory, setSpeciesInventory] = useLocalStorage<SpeciesInventory[]>(
+    userStorageKey(STORAGE_KEYS.speciesInventory, userId),
     []
   );
   const [pairings, setPairings] = useLocalStorage<Pairing[]>(
@@ -73,6 +129,25 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
     userStorageKey(STORAGE_KEYS.pestRisks, userId),
     []
   );
+
+  useEffect(() => {
+    if (growthEntries.length === 0) {
+      const migrated = readLegacyGrowthEntries(userId);
+      if (migrated.length > 0) {
+        setGrowthEntries(migrated);
+      }
+    }
+    if (pairings.length > 0) {
+      setPairings((prev) => normalizePairings(prev as unknown[]));
+    } else {
+      const migrated = readLegacyPairings(userId);
+      if (migrated.length > 0) {
+        setPairings(migrated);
+      }
+    }
+    setSpeciesInventory((prev) => migrateDbRowsToSpeciesInventory(initialDbBeetles, prev));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   const run = useCallback(async (fn: () => Promise<void>) => {
     setDataError('');
@@ -112,20 +187,27 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
   );
 
   const importData = useCallback(
-    async (payload: { beetles: Beetle[]; larvalRecords: LarvalRecord[] }) => {
+    async (payload: {
+      beetles: Beetle[];
+      growthEntries: GrowthEntry[];
+      speciesInventory?: SpeciesInventory[];
+    }) => {
       await run(async () => {
         const supabase = createClient();
         if (payload.beetles.length > 0) {
           const rows = await insertBeetlesForUser(supabase, userId, payload.beetles);
           setBeetles((prev) => [...dbBeetlesToBeetles(rows), ...prev]);
         }
-        if (payload.larvalRecords.length > 0) {
-          setLarvalRecords((prev) => [...payload.larvalRecords, ...prev]);
+        if (payload.growthEntries.length > 0) {
+          setGrowthEntries((prev) => [...payload.growthEntries, ...prev]);
+        }
+        if (payload.speciesInventory && payload.speciesInventory.length > 0) {
+          setSpeciesInventory((prev) => mergeSpeciesInventory(prev, payload.speciesInventory!));
         }
         router.push('/dashboard');
       });
     },
-    [run, userId, setLarvalRecords, router]
+    [run, userId, setGrowthEntries, setSpeciesInventory, router]
   );
 
   const clearAllData = useCallback(async () => {
@@ -133,12 +215,13 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
       const supabase = createClient();
       await deleteAllBeetlesForUser(supabase, userId);
       setBeetles([]);
-      setLarvalRecords([]);
+      setGrowthEntries([]);
+      setSpeciesInventory([]);
       setPairings([]);
       setPestRisks([]);
       clearAllAppDataFromStorage();
     });
-  }, [run, userId, setLarvalRecords, setPairings, setPestRisks]);
+  }, [run, userId, setGrowthEntries, setSpeciesInventory, setPairings, setPestRisks]);
 
   const restoreDemoData = useCallback(async () => {
     await run(async () => {
@@ -146,26 +229,37 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
       await deleteAllBeetlesForUser(supabase, userId);
       const rows = await insertBeetlesForUser(supabase, userId, mockBeetles);
       setBeetles(dbBeetlesToBeetles(rows));
-      setLarvalRecords(mockLarvalRecords);
+      setGrowthEntries(mockGrowthEntries);
+      setSpeciesInventory(mockSpeciesInventory);
       setPairings(mockPairings);
       setPestRisks(mockPestRisks);
     });
-  }, [run, userId, setLarvalRecords, setPairings, setPestRisks]);
+  }, [run, userId, setGrowthEntries, setSpeciesInventory, setPairings, setPestRisks]);
 
   const value = useMemo<BeetleAppContextValue>(
     () => ({
       userId,
       userEmail,
       beetles,
-      larvalRecords,
+      growthEntries,
+      speciesInventory,
       pairings,
       pestRisks,
       dataError,
       busy,
       addBeetle,
       updateBeetle,
-      addLarvalRecord: (record) => setLarvalRecords((prev) => [record, ...prev]),
-      addLarvalRecords: (records) => setLarvalRecords((prev) => [...records, ...prev]),
+      addGrowthEntry: (entry) => setGrowthEntries((prev) => [entry, ...prev]),
+      addGrowthEntries: (entries) => setGrowthEntries((prev) => [...entries, ...prev]),
+      updateSpeciesInventory: (rows) => setSpeciesInventory(rows),
+      upsertSpeciesInventory: (row) =>
+        setSpeciesInventory((prev) => {
+          const index = prev.findIndex((r) => r.species.toLowerCase() === row.species.toLowerCase());
+          if (index === -1) return [row, ...prev];
+          const next = [...prev];
+          next[index] = row;
+          return next;
+        }),
       addPairing: (pairing) => setPairings((prev) => [pairing, ...prev]),
       addPestRisk: (risk) => setPestRisks((prev) => [risk, ...prev]),
       updatePestRisk: (risk) =>
@@ -179,14 +273,16 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
       userId,
       userEmail,
       beetles,
-      larvalRecords,
+      growthEntries,
+      speciesInventory,
       pairings,
       pestRisks,
       dataError,
       busy,
       addBeetle,
       updateBeetle,
-      setLarvalRecords,
+      setGrowthEntries,
+      setSpeciesInventory,
       setPairings,
       setPestRisks,
       importData,

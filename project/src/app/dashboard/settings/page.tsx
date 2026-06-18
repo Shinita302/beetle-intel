@@ -4,12 +4,12 @@ import { Settings } from '@/features/Settings';
 import { useBeetleApp } from '@/contexts/BeetleAppContext';
 
 export default function SettingsPage() {
-  const { beetles, larvalRecords, pairings, pestRisks, clearAllData, restoreDemoData } = useBeetleApp();
+  const { beetles, growthEntries, pairings, pestRisks, clearAllData, restoreDemoData } = useBeetleApp();
 
   return (
     <Settings
       beetleCount={beetles.length}
-      larvalCount={larvalRecords.length}
+      larvalCount={growthEntries.length}
       pairingCount={pairings.length}
       pestCount={pestRisks.length}
       onClearAll={clearAllData}

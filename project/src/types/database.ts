@@ -1,6 +1,6 @@
-import type { BeetleInventoryCounts, BeetleStageNotes } from '@/types';
+import type { Json } from './database-json';
 
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+export type { Json };
 
 export interface DbBeetle {
   id: string;
@@ -25,18 +25,22 @@ export interface BeetleProfileMeta {
   sex?: string;
   status?: string;
   generation?: string;
-  stageNotes?: BeetleStageNotes;
+  notes?: string;
   source?: string;
-  emergenceDate?: string;
   bloodline?: string;
-  fatherParent?: string;
-  motherParent?: string;
-  isBigHitter?: boolean;
-  adultSize?: number;
-  adultWeight?: number;
 }
 
-export function parseInventoryCounts(json: Json): BeetleInventoryCounts {
+/** Legacy inventory blob — migrated to SpeciesInventory on load. */
+export interface LegacyBeetleInventoryCounts {
+  egg: number;
+  l1: number;
+  l2: number;
+  l3: number;
+  pupa: number;
+  adult: number;
+}
+
+export function parseLegacyInventoryCounts(json: Json): LegacyBeetleInventoryCounts {
   if (json && typeof json === 'object' && !Array.isArray(json)) {
     const o = json as Record<string, unknown>;
     return {

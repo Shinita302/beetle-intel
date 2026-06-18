@@ -1,12 +1,13 @@
 import Papa from 'papaparse';
-import type { Beetle, BeetleSex, BeetleStageNotes, BeetleStatus, LarvalRecord } from '../types';
-import {
-  emptyInstarWeights,
-  emptyInventoryCounts,
-  emptyStageNotes,
-  latestInstarWeight,
+import type {
+  Beetle,
+  BeetleSex,
+  BeetleStatus,
+  GrowthEntry,
+  GrowthStage,
+  SpeciesInventory,
 } from '../types';
-import type { BeetleInstarWeights, BeetleInventoryCounts } from '../types';
+import { emptySpeciesInventory } from '../types';
 import {
   cellHasSizeUnit,
   cellHasWeightUnit,
@@ -18,6 +19,109 @@ import {
 import { inventoryKeyForLifecycle } from './spreadsheetMetrics';
 import type { LifecycleStage } from '../types/lifecycle';
 import { parseLegacyContainerSize } from '../constants/containerSize';
+
+interface DraftStageNotes {
+  egg: string;
+  l1: string;
+  l2: string;
+  l3: string;
+  pupa: string;
+  adult: string;
+}
+
+interface DraftInstarWeights {
+  l1: number;
+  l2: number;
+  l3: number;
+}
+
+interface DraftInventoryCounts {
+  eggs: number;
+  l1: number;
+  l2: number;
+  l3: number;
+  prePupa: number;
+  pupa: number;
+  adult: number;
+}
+
+const emptyStageNotes = (): DraftStageNotes => ({
+  egg: '',
+  l1: '',
+  l2: '',
+  l3: '',
+  pupa: '',
+  adult: '',
+});
+
+const emptyInstarWeights = (): DraftInstarWeights => ({ l1: 0, l2: 0, l3: 0 });
+
+const emptyInventoryCounts = (): DraftInventoryCounts => ({
+  eggs: 0,
+  l1: 0,
+  l2: 0,
+  l3: 0,
+  prePupa: 0,
+  pupa: 0,
+  adult: 0,
+});
+
+function combineStageNotes(notes: DraftStageNotes): string {
+  return Object.values(notes)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function mergeDraftInventory(
+  map: Map<string, SpeciesInventory>,
+  species: string,
+  counts: DraftInventoryCounts
+) {
+  const key = species.trim();
+  if (!key) return;
+  const row = map.get(key.toLowerCase()) ?? emptySpeciesInventory(key, `INV-${key.slice(0, 8)}`);
+  row.eggs += counts.eggs;
+  row.l1 += counts.l1;
+  row.l2 += counts.l2;
+  row.l3 += counts.l3;
+  row.prePupa += counts.prePupa;
+  row.pupa += counts.pupa;
+  row.adult += counts.adult;
+  row.updatedAt = new Date().toISOString().slice(0, 10);
+  map.set(key.toLowerCase(), row);
+}
+
+function instarToGrowthStage(instar: keyof DraftInstarWeights): GrowthStage {
+  if (instar === 'l1') return 'L1';
+  if (instar === 'l2') return 'L2';
+  return 'L3';
+}
+
+function pushDraftGrowthEntries(
+  entries: GrowthEntry[],
+  beetleId: string,
+  weights: DraftInstarWeights,
+  notes: DraftStageNotes,
+  date: string
+) {
+  (['l1', 'l2', 'l3'] as const).forEach((instar) => {
+    const weight = weights[instar];
+    if (weight <= 0) return;
+    entries.push({
+      id: `GE-${String(entries.length + 1).padStart(3, '0')}`,
+      beetleId,
+      date,
+      stage: instarToGrowthStage(instar),
+      weight,
+      temperature: 0,
+      humidity: 0,
+      substrate: '',
+      notes: notes[instar] ?? '',
+      createdAt: date,
+    });
+  });
+}
 
 export type SpreadsheetStyle = 'header-table' | 'block-notes' | 'mixed';
 
@@ -71,13 +175,15 @@ export interface InterpretedRow {
 
 export interface StructuredImportBuild {
   beetles: Beetle[];
-  larvalRecords: LarvalRecord[];
+  growthEntries: GrowthEntry[];
+  speciesInventory: SpeciesInventory[];
   stageRecords: GeneratedStageRecord[];
   validationWarnings: string[];
   summary: {
     sourceRows: number;
     importedBeetles: number;
-    importedLarvalRecords: number;
+    importedGrowthEntries: number;
+    importedSpecies: number;
     skippedRows: number;
   };
 }
@@ -853,7 +959,7 @@ function parseGroupHeaderFields(cells: string[], fullText: string): {
   };
 }
 
-function stageNoteKeyFromDetection(stage: StageDetection): keyof BeetleStageNotes | null {
+function stageNoteKeyFromDetection(stage: StageDetection): keyof DraftStageNotes | null {
   if (stage.instar === 'L1') return 'l1';
   if (stage.instar === 'L2') return 'l2';
   if (stage.instar === 'L3') return 'l3';
@@ -901,9 +1007,9 @@ interface GroupBeetleDraft {
   sex: BeetleSex;
   generation: string;
   bloodline: string;
-  stageNotes: BeetleStageNotes;
-  instarWeights: BeetleInstarWeights;
-  inventoryCounts: BeetleInventoryCounts;
+  stageNotes: DraftStageNotes;
+  instarWeights: DraftInstarWeights;
+  inventoryCounts: DraftInventoryCounts;
   adultWeightImport: number;
   adultSizeImport: number;
 }
@@ -941,26 +1047,16 @@ function finalizeGroupDraft(
   existingBeetleCount: number,
   now: string
 ): Beetle {
-  const speciesWarningName = draft.name;
   return {
     id: nextBeetleId(existingBeetleCount, beetleIndex),
-    name: speciesWarningName,
+    name: draft.name,
     species: draft.species,
     sex: draft.sex,
     source: `import-row-${draft.sourceRow}`,
     generation: draft.generation,
-    emergenceDate: draft.status === 'adult' ? now : '',
-    instarWeights: { ...draft.instarWeights },
-    inventoryCounts: { ...draft.inventoryCounts },
-    larvalWeight: latestInstarWeight(draft.instarWeights),
-    adultSize: draft.adultSizeImport,
-    adultWeight: draft.adultWeightImport,
+    notes: combineStageNotes(draft.stageNotes),
     bloodline: draft.bloodline,
-    stageNotes: { ...draft.stageNotes },
-    fatherParent: '',
-    motherParent: '',
     status: draft.status,
-    isBigHitter: false,
     createdAt: now,
   };
 }
@@ -1090,11 +1186,12 @@ function mapParentInfo(text: string): { fatherParent: string; motherParent: stri
 export function generateRecordsFromConfirmed(params: {
   interpreted: InterpretedRow[];
   existingBeetles: Beetle[];
-  existingLarvalRecords: LarvalRecord[];
+  existingGrowthEntries: GrowthEntry[];
 }): StructuredImportBuild {
-  const { interpreted, existingBeetles, existingLarvalRecords } = params;
+  const { interpreted, existingBeetles, existingGrowthEntries } = params;
   const beetles: Beetle[] = [];
-  const larvalRecords: LarvalRecord[] = [];
+  const growthEntries: GrowthEntry[] = [];
+  const speciesInventoryMap = new Map<string, SpeciesInventory>();
   const stageRecords: GeneratedStageRecord[] = [];
   const validationWarnings: string[] = [];
   const now = new Date().toISOString().slice(0, 10);
@@ -1115,7 +1212,16 @@ export function generateRecordsFromConfirmed(params: {
     const speciesWarning = validateGeneratedSpecies(groupDraft.species, `row ${groupDraft.sourceRow}`);
     if (speciesWarning) validationWarnings.push(speciesWarning);
 
-    beetles.push(finalizeGroupDraft(groupDraft, beetles.length, existingBeetles.length, now));
+    const beetle = finalizeGroupDraft(groupDraft, beetles.length, existingBeetles.length, now);
+    beetles.push(beetle);
+    mergeDraftInventory(speciesInventoryMap, beetle.species, groupDraft.inventoryCounts);
+    pushDraftGrowthEntries(
+      growthEntries,
+      beetle.id,
+      groupDraft.instarWeights,
+      groupDraft.stageNotes,
+      now
+    );
     groupDraft = null;
   };
 
@@ -1208,7 +1314,6 @@ export function generateRecordsFromConfirmed(params: {
       const stage = (detectDevelopmentalStage(stageLabel)?.beetleStatus || parseStage(stageLabel) || 'adult') as BeetleStatus;
       const sex = parseSex(f.sex) || 'unknown';
       const beetleId = nextBeetleId(existingBeetles.length, beetles.length);
-      const parent = mapParentInfo(f.notes);
 
       beetles.push({
         id: beetleId,
@@ -1217,18 +1322,9 @@ export function generateRecordsFromConfirmed(params: {
         sex,
         source: `import-row-${row.source_row}`,
         generation: f.generation,
-        emergenceDate: stage === 'adult' ? f.date : '',
-        instarWeights: emptyInstarWeights(),
-        inventoryCounts: emptyInventoryCounts(),
-        larvalWeight: 0,
-        adultSize: stage === 'adult' ? parseNumeric(f.size) : 0,
-        adultWeight: stage === 'adult' ? parseNumeric(f.weight) : 0,
-        bloodline: f.notes,
-        stageNotes: emptyStageNotes(),
-        fatherParent: parent.fatherParent,
-        motherParent: parent.motherParent,
+        notes: f.notes?.trim() ?? '',
+        bloodline: '',
         status: stage,
-        isBigHitter: false,
         createdAt: now,
       });
 
@@ -1237,22 +1333,16 @@ export function generateRecordsFromConfirmed(params: {
         cellHasWeightUnit(rowText) || cellHasWeightUnit(f.weight) ? parseNumeric(f.weight) : 0;
 
       if (growthWeight > 0) {
-        const parsedSize = parseLegacyContainerSize('');
-        larvalRecords.push({
-          id: nextLarvalId(existingLarvalRecords.length, larvalRecords.length),
-          bottleId: `import-${row.source_row}`,
+        growthEntries.push({
+          id: `GE-${String(existingGrowthEntries.length + growthEntries.length + 1).padStart(3, '0')}`,
           beetleId,
-          dateChecked: f.date || now,
+          date: f.date || now,
+          stage: instarFromStageLabel(stageLabel) as GrowthStage,
           weight: growthWeight,
-          instarStage: instarFromStageLabel(stageLabel),
-          substrateType: 'Flake Soil',
-          containerSizeValue: parsedSize.value,
-          containerSizeUnit: parsedSize.unit,
           temperature: 0,
           humidity: 0,
+          substrate: 'Flake Soil',
           notes: f.notes,
-          photoUrl: '',
-          nextCheckDate: '',
           createdAt: now,
         });
       }
@@ -1266,13 +1356,15 @@ export function generateRecordsFromConfirmed(params: {
 
   return {
     beetles,
-    larvalRecords,
+    growthEntries,
+    speciesInventory: Array.from(speciesInventoryMap.values()),
     stageRecords,
     validationWarnings: [...new Set(validationWarnings)],
     summary: {
       sourceRows: interpreted.length,
       importedBeetles: beetles.length,
-      importedLarvalRecords: larvalRecords.length,
+      importedGrowthEntries: growthEntries.length,
+      importedSpecies: speciesInventoryMap.size,
       skippedRows,
     },
   };

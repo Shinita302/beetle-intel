@@ -23,11 +23,12 @@ import {
 import { StatCard } from '../components/ui/StatCard';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import type { Beetle, LarvalRecord, Pairing, PestRisk } from '../types';
+import type { Beetle, GrowthEntry, Pairing, PestRisk } from '../types';
+import { beetleLabel, pairingFertilityScore } from '../types';
 
 interface DashboardProps {
   beetles: Beetle[];
-  larvalRecords: LarvalRecord[];
+  growthEntries: GrowthEntry[];
   pairings: Pairing[];
   pestRisks: PestRisk[];
   onNavigate: (page: string) => void;
@@ -35,69 +36,56 @@ interface DashboardProps {
 
 function calcHatchRate(pairings: Pairing[]): number {
   if (pairings.length === 0) return 0;
-  const total = pairings.reduce((s, p) => s + p.totalEggsLaid, 0);
-  const hatched = pairings.reduce((s, p) => s + p.hatchedEggs, 0);
+  const total = pairings.reduce((s, p) => s + p.eggsProduced, 0);
+  const hatched = pairings.reduce((s, p) => s + p.hatched, 0);
   return total === 0 ? 0 : Math.round((hatched / total) * 100);
 }
 
 function calcFertilityScore(pairings: Pairing[]): number {
   if (pairings.length === 0) return 0;
-  const scores = pairings.map((p) => {
-    const eggSR = p.totalEggsLaid > 0 ? p.hatchedEggs / p.totalEggsLaid : 0;
-    const larvalSR = p.hatchedEggs > 0 ? p.pupatedLarvae / p.hatchedEggs : 0;
-    const pupalSR = p.pupatedLarvae > 0 ? p.emergedAdults / p.pupatedLarvae : 0;
-    const overall = eggSR * larvalSR * pupalSR;
-    return Math.round(overall * 100);
-  });
+  const scores = pairings.map((p) => pairingFertilityScore(p));
   return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
 }
 
-function getLarvalGrowthChart(beetles: Beetle[], larvalRecords: LarvalRecord[]) {
+function getLarvalGrowthChart(beetles: Beetle[], growthEntries: GrowthEntry[]) {
   const top3 = beetles
     .filter((b) => b.status === 'larva' || b.status === 'pupa')
     .slice(0, 3);
 
   if (top3.length === 0) {
     const adultTop3 = beetles.filter((b) => b.status === 'adult').slice(0, 3);
-    const allRecords = adultTop3.flatMap((b) =>
-      larvalRecords
-        .filter((lr) => lr.beetleId === b.id)
-        .map((lr) => ({
-          date: lr.dateChecked.slice(5),
-          weight: lr.weight,
+    return adultTop3.flatMap((b) =>
+      growthEntries
+        .filter((entry) => entry.beetleId === b.id)
+        .map((entry) => ({
+          date: entry.date.slice(5),
+          weight: entry.weight,
           name: b.name,
         }))
     );
-    return allRecords;
   }
 
   const data: Record<string, { date: string; [key: string]: string | number }> = {};
   top3.forEach((b) => {
-    larvalRecords
-      .filter((lr) => lr.beetleId === b.id)
-      .sort((a, b2) => a.dateChecked.localeCompare(b2.dateChecked))
-      .forEach((lr) => {
-        const key = lr.dateChecked.slice(5);
+    growthEntries
+      .filter((entry) => entry.beetleId === b.id)
+      .sort((a, b2) => a.date.localeCompare(b2.date))
+      .forEach((entry) => {
+        const key = entry.date.slice(5);
         if (!data[key]) data[key] = { date: key };
-        data[key][b.name] = lr.weight;
+        data[key][b.name] = entry.weight;
       });
   });
 
   return Object.values(data).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function getFertilityRanking(pairings: Pairing[]) {
+function getFertilityRanking(beetles: Beetle[], pairings: Pairing[]) {
   return pairings
-    .map((p) => {
-      const eggSR = p.totalEggsLaid > 0 ? p.hatchedEggs / p.totalEggsLaid : 0;
-      const larvalSR = p.hatchedEggs > 0 ? p.pupatedLarvae / p.hatchedEggs : 0;
-      const pupalSR = p.pupatedLarvae > 0 ? p.emergedAdults / p.pupatedLarvae : 0;
-      const score = Math.round(eggSR * larvalSR * pupalSR * 100);
-      return {
-        name: `${p.maleBeetleName} x ${p.femaleBeetleName}`,
-        score,
-      };
-    })
+    .map((p) => ({
+      name: `${beetleLabel(beetles, p.maleBeetleId)} x ${beetleLabel(beetles, p.femaleBeetleId)}`,
+      score: pairingFertilityScore(p),
+    }))
     .sort((a, b) => b.score - a.score);
 }
 
@@ -111,12 +99,12 @@ const problemTypeLabel: Record<string, string> = {
   unknown: 'Unknown',
 };
 
-export function Dashboard({ beetles, larvalRecords, pairings, pestRisks, onNavigate }: DashboardProps) {
+export function Dashboard({ beetles, growthEntries, pairings, pestRisks, onNavigate }: DashboardProps) {
   const activeLarvae = beetles.filter((b) => b.status === 'larva').length;
   const avgHatchRate = calcHatchRate(pairings);
   const avgFertility = calcFertilityScore(pairings);
-  const growthData = getLarvalGrowthChart(beetles, larvalRecords);
-  const fertilityData = getFertilityRanking(pairings);
+  const growthData = getLarvalGrowthChart(beetles, growthEntries);
+  const fertilityData = getFertilityRanking(beetles, pairings);
   const openPestRisks = pestRisks.filter((pr) => pr.status === 'open');
   const recentPairings = [...pairings].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
 
@@ -296,11 +284,13 @@ export function Dashboard({ beetles, larvalRecords, pairings, pestRisks, onNavig
               <tbody>
                 {recentPairings.map((p) => (
                   <tr key={p.id} className="border-b border-gray-800/50">
-                    <td className="py-2.5 text-gray-300">{p.maleBeetleName} x {p.femaleBeetleName}</td>
+                    <td className="py-2.5 text-gray-300">
+                      {beetleLabel(beetles, p.maleBeetleId)} x {beetleLabel(beetles, p.femaleBeetleId)}
+                    </td>
                     <td className="py-2.5 text-gray-500">{p.pairingDate}</td>
-                    <td className="py-2.5 text-right text-gray-400">{p.totalEggsLaid}</td>
-                    <td className="py-2.5 text-right text-gray-400">{p.hatchedEggs}</td>
-                    <td className="py-2.5 text-right text-emerald-400 font-medium">{p.emergedAdults}</td>
+                    <td className="py-2.5 text-right text-gray-400">{p.eggsProduced}</td>
+                    <td className="py-2.5 text-right text-gray-400">{p.hatched}</td>
+                    <td className="py-2.5 text-right text-emerald-400 font-medium">{p.emerged}</td>
                   </tr>
                 ))}
                 {recentPairings.length === 0 && (

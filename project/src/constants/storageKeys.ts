@@ -1,10 +1,12 @@
 /** All localStorage keys used by BeetleIntel. */
 export const STORAGE_KEYS = {
   beetles: 'beetle-intel-beetles',
+  growthEntries: 'beetle-intel-growth-entries',
+  /** @deprecated migrated to growthEntries */
   larvalRecords: 'beetle-intel-larval',
+  speciesInventory: 'beetle-intel-species-inventory',
   pairings: 'beetle-intel-pairings',
   pestRisks: 'beetle-intel-pests',
-  growthOverrides: 'beetle-intel-growth-overrides',
 } as const;
 
 export const ALL_STORAGE_KEYS = Object.values(STORAGE_KEYS);

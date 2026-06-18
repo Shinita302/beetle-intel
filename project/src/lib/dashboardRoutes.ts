@@ -3,6 +3,7 @@ import type { Page } from '@/components/layout/Sidebar';
 export const PAGE_ROUTES: Record<Page, string> = {
   dashboard: '/dashboard',
   'add-beetle': '/dashboard/add-beetle',
+  inventory: '/dashboard/inventory',
   'import-spreadsheet': '/dashboard/import',
   'larval-growth': '/dashboard/larval-growth',
   pairing: '/dashboard/pairing',
