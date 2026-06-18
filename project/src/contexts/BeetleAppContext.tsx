@@ -1,3 +1,5 @@
+'use client';
+
 import type { Beetle, GrowthEntry, Pairing, PestRisk, SpeciesInventory } from '@/types';
 import type { DbBeetle } from '@/types/database';
 import { dbBeetleToBeetle, dbBeetlesToBeetles } from '@/lib/beetleDbMapper';

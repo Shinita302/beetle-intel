@@ -5,7 +5,7 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { FormField, SelectInput, NumberInput, TextInput } from '../ui/FormField';
 import { SubstrateTypeField } from '../forms/SubstrateTypeField';
-import { parseSubstrateType, resolveSubstrateType } from '../constants/substrate';
+import { parseSubstrateType, resolveSubstrateType } from '../../constants/substrate';
 import type { Beetle, GrowthEntry, GrowthStage } from '../../types';
 import { beetleLabel } from '../../types';
 

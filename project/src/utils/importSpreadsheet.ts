@@ -18,7 +18,6 @@ import {
 } from './spreadsheetMetrics';
 import { inventoryKeyForLifecycle } from './spreadsheetMetrics';
 import type { LifecycleStage } from '../types/lifecycle';
-import { parseLegacyContainerSize } from '../constants/containerSize';
 
 interface DraftStageNotes {
   egg: string;
@@ -519,10 +518,6 @@ function emptyFields(): RowFieldDraft {
 
 function nextBeetleId(existingCount: number, index: number): string {
   return `B-${String(existingCount + index + 1).padStart(3, '0')}`;
-}
-
-function nextLarvalId(existingCount: number, index: number): string {
-  return `LR-${String(existingCount + index + 1).padStart(3, '0')}`;
 }
 
 function matrixToRows(matrix: string[][]): RawSheetRow[] {
@@ -1175,11 +1170,6 @@ function openGroupDraftFromContext(
     adultWeightImport: 0,
     adultSizeImport: 0,
   };
-}
-
-function mapParentInfo(text: string): { fatherParent: string; motherParent: string } {
-  const chunks = text.split(/[x×|/,;-]/).map((c) => c.trim()).filter(Boolean);
-  return { fatherParent: chunks[0] ?? '', motherParent: chunks[1] ?? '' };
 }
 
 /** Step 2: generate beetle profiles only from user-confirmed rows */

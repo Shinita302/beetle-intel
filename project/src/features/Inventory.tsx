@@ -34,7 +34,7 @@ const STAGE_COLUMNS: { key: SpeciesInventoryStageKey; label: string }[] = [
 
 const PAGE_SIZE = 8;
 
-({ speciesInventory, onUpdate, onUpsert }: InventoryProps) {
+export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryProps) {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('species');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
