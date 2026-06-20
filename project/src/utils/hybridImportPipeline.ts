@@ -30,10 +30,7 @@ function scoreBlockGroup(group: EditableImportGroup, block: ImportRowBlock): num
   if (!group.origin) score -= 4;
   if (!group.lineName) score -= 20;
 
-  const headerMentionsAdult = block.rowIndices.some((index) => {
-    const text = group.species + group.notes;
-    return /adult/i.test(text);
-  });
+  const headerMentionsAdult = /adult/i.test(`${group.species} ${group.notes} ${group.category}`);
   if (headerMentionsAdult && group.adult === 0 && group.total > 0) {
     score -= 22;
   }
