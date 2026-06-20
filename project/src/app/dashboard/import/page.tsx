@@ -4,14 +4,14 @@ import { ImportSpreadsheet } from '@/features/ImportSpreadsheet';
 import { useBeetleApp } from '@/contexts/BeetleAppContext';
 
 export default function DashboardImportPage() {
-  const { beetles, growthEntries, importData, busy } = useBeetleApp();
+  const { beetles, growthEntries, importData, busy, userId } = useBeetleApp();
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-100">Import Spreadsheet</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Upload breeding data from Excel or CSV. Beetles save to your account; inventory and growth logs stay in this browser.
+          Hybrid import: automatic population groups with editable preview before saving.
         </p>
       </div>
       {busy && (
@@ -22,6 +22,7 @@ export default function DashboardImportPage() {
       <ImportSpreadsheet
         beetles={beetles}
         growthEntries={growthEntries}
+        userId={userId}
         onImportConfirmed={importData}
       />
     </div>
