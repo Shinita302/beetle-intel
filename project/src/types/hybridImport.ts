@@ -50,10 +50,29 @@ export interface ImportCorrectionRule {
   createdAt: string;
 }
 
+export interface ImportGroupAuditEntry {
+  species: string;
+  lineName: string;
+  eggs: number;
+  l1: number;
+  l2: number;
+  l3: number;
+  prePupa: number;
+  pupa: number;
+  adult: number;
+  total: number;
+  status: 'imported' | 'skipped' | 'rejected';
+  reason: string;
+  sourceRow: number;
+  sourceSheet?: string;
+}
+
 export interface HybridImportResult {
   groups: EditableImportGroup[];
   blocks: ImportRowBlock[];
   skippedNotes: string[];
+  /** Every detected population header/group with import outcome and reason. */
+  groupAudit: ImportGroupAuditEntry[];
   sheetsProcessed: string[];
   sheetsSkipped: string[];
   growthSheetsImported: string[];

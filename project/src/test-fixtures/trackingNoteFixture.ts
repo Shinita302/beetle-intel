@@ -19,6 +19,38 @@ export const HERCULES_F4_BLOCK = [
   ['adult(F4)', '24'],
 ];
 
+export const LAMPRIMA_BLOCK = [
+  ['lamprima adolphinae', 'headcount', 'adult', 'CB'],
+  ['16'],
+];
+
+export const CALCOSOMA_CB_BLOCK = [
+  ['Calcosoma.M', 'CB'],
+  ['L1', '20'],
+  ['adult', '5'],
+];
+
+export const HPERRyi_ADULT_ONLY_BLOCK = [
+  ['H.Perryi', 'headcount', 'adult', 'WC'],
+  ['8'],
+];
+
+export const MUSIMON_EGG_PUPA_BLOCK = [
+  ['Musimon', 'headcount', 'CB'],
+  ['eggs', '12'],
+  ['pupa', '4'],
+];
+
+/** Six-species fixture matching common Tracking note inventory layouts. */
+export const SIX_SPECIES_INVENTORY_ROWS = [
+  ...LAMPRIMA_BLOCK,
+  ...HERCULES_F4_BLOCK,
+  ...GIRAFFE_ADULT_BLOCK,
+  ...CALCOSOMA_CB_BLOCK,
+  ...HPERRyi_ADULT_ONLY_BLOCK,
+  ...MUSIMON_EGG_PUPA_BLOCK,
+];
+
 export const TRACKING_NOTE_INVENTORY_ROWS = [
   ...GIRAFFE_WITH_OBSERVATION,
   ...HERCULES_F4_BLOCK,

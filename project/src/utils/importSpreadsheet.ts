@@ -28,6 +28,9 @@ import {
   parseStrictOrigin,
   type InventoryCountKey,
 } from './importFieldParsing';
+import {
+  looksLikePopulationGroupHeader,
+} from './importPopulationHeaderDetection';
 
 interface DraftInventoryCounts {
   eggs: number;
@@ -812,23 +815,7 @@ function isHeadcountCategory(value: string): boolean {
 
 /** Breeder inventory header: species/line + headcount or adult(F4) generation row */
 function isPopulationGroupHeader(cells: string[], fullText: string): boolean {
-  if (isObservationNoteText(fullText)) return false;
-
-  const textCells = cells.map((c) => c.trim()).filter(Boolean);
-  if (!/headcount/i.test(fullText)) {
-    const hasHeadcountStructure =
-      textCells.some((c) => isHeadcountCategory(c)) &&
-      textCells.some((c) => isValidLineName(c) && !isMetaInventoryCell(c)) &&
-      textCells.some((c) => isAdultLabel(c) || /^adults?$/i.test(c) || detectDevelopmentalStage(c));
-    if (!hasHeadcountStructure) {
-      return isGroupAnchorRow(cells, fullText);
-    }
-  }
-
-  const lineName = textCells.find((c) => isValidLineName(c) && !isMetaInventoryCell(c));
-  if (!lineName) return false;
-
-  return /headcount/i.test(fullText) || textCells.some((c) => isAdultLabel(c) || /^adults?$/i.test(c));
+  return looksLikePopulationGroupHeader(cells, fullText);
 }
 
 function isMetaInventoryCell(value: string): boolean {
@@ -896,7 +883,7 @@ function isGroupAnchorRow(cells: string[], fullText: string): boolean {
 /** Developmental stage rows with optional numbers — never group headers */
 function isStageCountRow(cells: string[]): boolean {
   const fullText = cells.filter((cell) => cell.trim()).join(' | ');
-  if (isGroupAnchorRow(cells, fullText)) return false;
+  if (looksLikePopulationGroupHeader(cells, fullText)) return false;
 
   if (extractStageFromRow(cells)) return true;
 
@@ -1080,7 +1067,14 @@ function interpretSingleRow(
         !isDevelopmentalStageLabel(cell) &&
         !isAdultLabel(cell)
     );
-    if (idCell || (nameCandidate && (sexFromText || speciesText))) {
+    const hasInventorySignals = textCells.some(
+      (cell) =>
+        isHeadcountCategory(cell) ||
+        Boolean(parseStrictOrigin(cell)) ||
+        isAdultLabel(cell) ||
+        /^adults?$/i.test(cell)
+    );
+    if (idCell || (nameCandidate && (sexFromText || speciesText) && !hasInventorySignals)) {
       meaning = 'individual-beetle';
       confidence = idCell ? 92 : 82;
       fields.beetle_name = nameCandidate || idCell || '';
@@ -1149,6 +1143,70 @@ function interpretSingleRow(
 
 
 /** Step 1: interpret raw rows without creating beetle profiles */
+function promotePopulationHeaderRows(interpreted: InterpretedRow[]): void {
+  for (const row of interpreted) {
+    if (row.user_meaning === 'group-header' || row.user_meaning === 'empty' || row.user_meaning === 'note') {
+      continue;
+    }
+    if (!looksLikePopulationGroupHeader(row.original_cells, row.raw_text)) continue;
+
+    const cells = row.original_cells;
+    const fullText = row.raw_text;
+    const headerFields = parsePopulationHeaderFields(cells, fullText);
+
+    row.user_meaning = 'group-header';
+    row.detected_meaning = 'group-header';
+    row.confidence = Math.max(row.confidence, 88);
+    row.needs_user_mapping = false;
+    row.user_fields.species_or_group =
+      headerFields.lineName || headerFields.species || row.user_fields.species_or_group;
+    row.user_fields.beetle_name = '';
+    row.user_fields.generation = headerFields.generation || row.user_fields.generation;
+    row.detection_notes = [row.detection_notes, 'Promoted to population group header']
+      .filter(Boolean)
+      .join('. ');
+  }
+}
+
+function rewireInterpretedGroupContext(interpreted: InterpretedRow[]): void {
+  let currentGroup = '';
+  let activeGroupStage: ActiveGroupStage = '';
+
+  for (const item of interpreted) {
+    const meaning = item.user_meaning;
+    const speciesField = item.user_fields.species_or_group;
+
+    if (meaning === 'group-header') {
+      if (shouldPromoteToActiveGroup(speciesField)) {
+        currentGroup = speciesField;
+      }
+      activeGroupStage = headerStageFromFields(item.user_fields);
+    }
+
+    if (meaning === 'stage-count') {
+      const explicitStage = inventoryKeyFromLabel(item.user_fields.stage_status);
+      if (explicitStage && ['l1', 'l2', 'l3', 'eggs', 'pupa', 'prePupa'].includes(explicitStage)) {
+        // Keep header adult context for later numeric-only rows.
+      } else if (explicitStage === 'adult') {
+        activeGroupStage = 'adult';
+      }
+
+      const sanitized = sanitizeStageRowFields(item.user_fields, currentGroup);
+      item.user_fields = { ...sanitized };
+      item.suggested_fields = { ...sanitizeStageRowFields(item.suggested_fields, currentGroup) };
+      item.inherit_group = Boolean(currentGroup);
+      if (currentGroup && !item.user_fields.species_or_group) {
+        item.user_fields.species_or_group = currentGroup;
+        item.suggested_fields.species_or_group = currentGroup;
+      }
+    }
+
+    if (meaning === 'empty' || meaning === 'individual-beetle') {
+      activeGroupStage = '';
+    }
+  }
+}
+
 export function interpretRawRows(parsed: ParsedSpreadsheet): InterpretedRow[] {
   let currentGroup = '';
   let currentSheet = '';
@@ -1194,6 +1252,9 @@ export function interpretRawRows(parsed: ParsedSpreadsheet): InterpretedRow[] {
 
     interpreted.push(item);
   });
+
+  promotePopulationHeaderRows(interpreted);
+  rewireInterpretedGroupContext(interpreted);
 
   return interpreted;
 }
@@ -1300,7 +1361,22 @@ function createInventoryGroupDraft(row: InterpretedRow, cells: string[]): Invent
     draft.inventoryCounts.adult = header.headerAdultCount;
   }
 
+  applySameRowStageCounts(draft, cells);
+
   return draft;
+}
+
+/** Parse stage/count pairs on the same row as the group header (e.g. L1 | 106 | adult | 24). */
+function applySameRowStageCounts(draft: InventoryGroupDraft, cells: string[]): void {
+  const nonEmpty = cells.map((c) => c.trim()).filter(Boolean);
+  for (let i = 0; i < nonEmpty.length - 1; i++) {
+    const inventoryKey = inventoryKeyFromLabel(nonEmpty[i]);
+    const count = parseNumeric(nonEmpty[i + 1]);
+    if (inventoryKey && count > 0) {
+      draft.inventoryCounts[inventoryKey] = count;
+      i += 1;
+    }
+  }
 }
 
 function inventoryGroupPreviewFromDraft(draft: InventoryGroupDraft): PopulationGroupPreview {

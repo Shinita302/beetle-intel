@@ -11,6 +11,8 @@ import {
   GIRAFFE_ADULT_BLOCK,
   GIRAFFE_WITH_OBSERVATION,
   HERCULES_F4_BLOCK,
+  HPERRyi_ADULT_ONLY_BLOCK,
+  SIX_SPECIES_INVENTORY_ROWS,
   TRACKING_NOTE_GROWTH_SHEET,
   TRACKING_NOTE_INVENTORY_ROWS,
 } from '@/test-fixtures/trackingNoteFixture';
@@ -96,5 +98,50 @@ describe('hybrid import pipeline', () => {
     expect(result.groups[0].generation).toBe('F4');
     expect(result.groups[0].adult).toBe(24);
     expect(result.groups[0].confidence).not.toBe('low');
+  });
+
+  it('imports all six species from mixed-format inventory sheet', async () => {
+    const result = await runHybridImportPipeline({
+      parsed: mockParsed(SIX_SPECIES_INVENTORY_ROWS),
+      fileName: 'Tracking note 2026 May-Jun.xlsx',
+      useLlmFallback: false,
+    });
+
+    const lineNames = result.groups.map((g) => g.lineName);
+    expect(lineNames).toContain('lamprima adolphinae');
+    expect(lineNames).toContain('Hercules Hercules');
+    expect(lineNames).toContain('Giraffe.K');
+    expect(lineNames).toContain('Calcosoma.M');
+    expect(lineNames).toContain('H.Perryi');
+    expect(lineNames).toContain('Musimon');
+    expect(result.groups.length).toBeGreaterThanOrEqual(6);
+
+    const hercules = result.groups.find((g) => g.lineName === 'Hercules Hercules');
+    expect(hercules?.l1).toBe(106);
+    expect(hercules?.adult).toBe(24);
+
+    const perryi = result.groups.find((g) => g.lineName === 'H.Perryi');
+    expect(perryi?.adult).toBe(8);
+    expect(perryi?.l1).toBe(0);
+
+    const musimon = result.groups.find((g) => g.lineName === 'Musimon');
+    expect(musimon?.eggs).toBe(12);
+    expect(musimon?.pupa).toBe(4);
+
+    expect(result.groupAudit.filter((a) => a.status === 'imported').length).toBeGreaterThanOrEqual(6);
+    expect(result.groupAudit.every((a) => a.reason.length > 0)).toBe(true);
+  });
+
+  it('includes adult-only groups in audit as imported', async () => {
+    const result = await runHybridImportPipeline({
+      parsed: mockParsed(HPERRyi_ADULT_ONLY_BLOCK),
+      fileName: 'breeder.xlsx',
+      useLlmFallback: false,
+    });
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].adult).toBe(8);
+    expect(result.groupAudit[0].status).toBe('imported');
+    expect(result.groupAudit[0].reason).toMatch(/Imported with 8 total population/);
   });
 });

@@ -1,4 +1,10 @@
-import type { ConfidenceLevel, EditableImportGroup, HybridImportResult, ImportRowBlock } from '@/types/hybridImport';
+import type {
+  ConfidenceLevel,
+  EditableImportGroup,
+  HybridImportResult,
+  ImportGroupAuditEntry,
+  ImportRowBlock,
+} from '@/types/hybridImport';
 import type { SpeciesInventory } from '@/types';
 import { emptySpeciesInventory, inventoryGroupId } from '@/types';
 import { detectInventoryBlocks, rowsForBlock } from './importBlockDetection';
@@ -8,6 +14,10 @@ import {
   sanitizeImportGroupFields,
   validateImportGroup,
 } from './importGroupValidation';
+import {
+  inferSpeciesFromHeaderCells,
+  looksLikePopulationGroupHeader,
+} from './importPopulationHeaderDetection';
 import {
   generateRecordsFromConfirmed,
   interpretRawRows,
@@ -44,12 +54,13 @@ function scoreBlockGroup(group: EditableImportGroup, block: ImportRowBlock): num
 function previewToEditableGroup(
   preview: PopulationGroupPreview,
   block: ImportRowBlock,
+  blockId: string,
   warnings: string[],
   parseSource: EditableImportGroup['parseSource'] = 'deterministic'
 ): EditableImportGroup {
   const notes = block.noteRows.filter(Boolean).join('; ');
   const group: EditableImportGroup = {
-    id: block.id,
+    id: blockId,
     species: preview.species,
     lineName: preview.lineName,
     origin: preview.origin,
@@ -76,12 +87,67 @@ function previewToEditableGroup(
   return sanitizeImportGroupFields(group);
 }
 
+function auditFromPreview(
+  preview: PopulationGroupPreview,
+  status: ImportGroupAuditEntry['status'],
+  reason: string,
+  sourceRow: number
+): ImportGroupAuditEntry {
+  return {
+    species: preview.species,
+    lineName: preview.lineName,
+    eggs: preview.eggs,
+    l1: preview.l1,
+    l2: preview.l2,
+    l3: preview.l3,
+    prePupa: preview.prePupa,
+    pupa: preview.pupa,
+    adult: preview.adult,
+    total: preview.total,
+    status,
+    reason,
+    sourceRow,
+    sourceSheet: preview.sourceSheet,
+  };
+}
+
+function auditFromBlockFailure(
+  block: ImportRowBlock,
+  blockRows: ReturnType<typeof rowsForBlock>,
+  reason: string
+): ImportGroupAuditEntry {
+  const headerRow = blockRows.find((row) => row.user_meaning === 'group-header') ?? blockRows[0];
+  const species =
+    inferSpeciesFromHeaderCells(headerRow?.original_cells ?? []) ||
+    headerRow?.user_fields.species_or_group ||
+    'Unknown';
+
+  return {
+    species,
+    lineName: species,
+    eggs: 0,
+    l1: 0,
+    l2: 0,
+    l3: 0,
+    prePupa: 0,
+    pupa: 0,
+    adult: 0,
+    total: 0,
+    status: 'skipped',
+    reason,
+    sourceRow: block.startRow,
+    sourceSheet: block.sourceSheet,
+  };
+}
+
 function parseBlockDeterministic(
   blockRows: ReturnType<typeof rowsForBlock>,
   block: ImportRowBlock,
   fileName: string
-): EditableImportGroup | null {
-  if (blockRows.length === 0) return null;
+): { groups: EditableImportGroup[]; warnings: string[] } {
+  if (blockRows.length === 0) {
+    return { groups: [], warnings: ['Block has no rows'] };
+  }
 
   const result = generateRecordsFromConfirmed({
     interpreted: blockRows,
@@ -91,10 +157,60 @@ function parseBlockDeterministic(
     sheetNames: block.sourceSheet ? [block.sourceSheet] : [],
   });
 
-  if (result.populationGroups.length === 0) return null;
+  if (result.populationGroups.length === 0) {
+    return { groups: [], warnings: result.validationWarnings };
+  }
 
-  const preview = result.populationGroups[0];
-  return previewToEditableGroup(preview, block, result.validationWarnings, 'deterministic');
+  const groups = result.populationGroups.map((preview, index) =>
+    previewToEditableGroup(
+      preview,
+      block,
+      result.populationGroups.length > 1 ? `${block.id}-${index}` : block.id,
+      result.validationWarnings,
+      'deterministic'
+    )
+  );
+
+  return { groups, warnings: result.validationWarnings };
+}
+
+function buildDetectedHeaderAudit(
+  interpreted: ReturnType<typeof interpretRawRows>,
+  groupAudit: ImportGroupAuditEntry[]
+): ImportGroupAuditEntry[] {
+  const rejected: ImportGroupAuditEntry[] = [];
+  const auditedRows = new Set(groupAudit.map((entry) => `${entry.sourceSheet ?? ''}:${entry.sourceRow}`));
+
+  for (const row of interpreted) {
+    if (!looksLikePopulationGroupHeader(row.original_cells, row.raw_text)) continue;
+
+    const rowKey = `${row.source_sheet ?? ''}:${row.source_row}`;
+    if (auditedRows.has(rowKey)) continue;
+
+    const species = inferSpeciesFromHeaderCells(row.original_cells) || row.user_fields.species_or_group;
+
+    rejected.push({
+      species,
+      lineName: species,
+      eggs: 0,
+      l1: 0,
+      l2: 0,
+      l3: 0,
+      prePupa: 0,
+      pupa: 0,
+      adult: 0,
+      total: 0,
+      status: 'rejected',
+      reason:
+        row.user_meaning === 'group-header'
+          ? 'Population header detected but produced no importable counts (check stage rows below header)'
+          : `Row classified as "${row.user_meaning}" — not grouped into an importable block`,
+      sourceRow: row.source_row,
+      sourceSheet: row.source_sheet,
+    });
+  }
+
+  return rejected;
 }
 
 export async function runHybridImportPipeline(params: {
@@ -114,44 +230,88 @@ export async function runHybridImportPipeline(params: {
 
   let usedLlmFallback = false;
   const groups: EditableImportGroup[] = [];
+  const groupAudit: ImportGroupAuditEntry[] = [];
 
   for (const block of blocks) {
     const blockRows = rowsForBlock(interpreted, block);
-    let group = parseBlockDeterministic(blockRows, block, fileName);
-    if (!group) continue;
+    const parsedBlock = parseBlockDeterministic(blockRows, block, fileName);
 
-    group = applyCorrectionRules(group, rules);
-    group = sanitizeImportGroupFields(group);
-    group.validationWarnings = validateImportGroup(group);
-    group.confidenceScore = scoreBlockGroup(group, block);
-    group.confidence = confidenceFromScore(group.confidenceScore);
-
-    const shouldTryLlm =
-      useLlmFallback &&
-      isLlmFallbackAvailable() &&
-      (group.confidence === 'low' || group.validationWarnings.length > 0);
-
-    if (shouldTryLlm) {
-      const llmGroup = await parseBlockWithLlm(blockRows, block);
-      if (llmGroup) {
-        group = sanitizeImportGroupFields({
-          ...llmGroup,
-          id: block.id,
-          sourceSheet: block.sourceSheet,
-          startRow: block.startRow,
-          endRow: block.endRow,
-          included: true,
-          parseSource: 'llm',
-        });
-        group.validationWarnings = validateImportGroup(group);
-        group.confidenceScore = Math.max(group.confidenceScore, scoreBlockGroup(group, block));
-        group.confidence = confidenceFromScore(group.confidenceScore);
-        usedLlmFallback = true;
-      }
+    if (parsedBlock.groups.length === 0) {
+      const reason =
+        parsedBlock.warnings.join('; ') ||
+        'No valid population counts extracted from block (needs at least one Eggs/L1/L2/L3/Pre-pupa/Pupa/Adult count)';
+      groupAudit.push(auditFromBlockFailure(block, blockRows, reason));
+      continue;
     }
 
-    groups.push(group);
+    for (const baseGroup of parsedBlock.groups) {
+      let group = applyCorrectionRules(baseGroup, rules);
+      group = sanitizeImportGroupFields(group);
+      group.validationWarnings = validateImportGroup(group);
+      group.confidenceScore = scoreBlockGroup(group, block);
+      group.confidence = confidenceFromScore(group.confidenceScore);
+
+      const shouldTryLlm =
+        useLlmFallback &&
+        isLlmFallbackAvailable() &&
+        (group.confidence === 'low' || group.validationWarnings.length > 0);
+
+      if (shouldTryLlm) {
+        const llmGroup = await parseBlockWithLlm(blockRows, block);
+        if (llmGroup) {
+          group = sanitizeImportGroupFields({
+            ...llmGroup,
+            id: baseGroup.id,
+            sourceSheet: block.sourceSheet,
+            startRow: block.startRow,
+            endRow: block.endRow,
+            included: true,
+            parseSource: 'llm',
+          });
+          group.validationWarnings = validateImportGroup(group);
+          group.confidenceScore = Math.max(group.confidenceScore, scoreBlockGroup(group, block));
+          group.confidence = confidenceFromScore(group.confidenceScore);
+          usedLlmFallback = true;
+        }
+      }
+
+      const auditStatus: ImportGroupAuditEntry['status'] = group.total > 0 ? 'imported' : 'skipped';
+      const auditReason =
+        group.validationWarnings.length > 0
+          ? group.validationWarnings.join('; ')
+          : group.total > 0
+            ? `Imported with ${group.total} total population (${group.parseSource} parser)`
+            : 'No population counts extracted';
+
+      groupAudit.push(
+        auditFromPreview(
+          {
+            species: group.species,
+            lineName: group.lineName,
+            generation: group.generation,
+            origin: group.origin,
+            category: group.category,
+            eggs: group.eggs,
+            l1: group.l1,
+            l2: group.l2,
+            l3: group.l3,
+            prePupa: group.prePupa,
+            pupa: group.pupa,
+            adult: group.adult,
+            total: group.total,
+            sourceSheet: group.sourceSheet,
+          },
+          auditStatus,
+          auditReason,
+          group.startRow
+        )
+      );
+
+      groups.push(group);
+    }
   }
+
+  groupAudit.push(...buildDetectedHeaderAudit(interpreted, groupAudit));
 
   const beetleResult = generateRecordsFromConfirmed({
     interpreted: interpreted.filter((row) => row.user_meaning === 'individual-beetle'),
@@ -175,6 +335,7 @@ export async function runHybridImportPipeline(params: {
     groups,
     blocks,
     skippedNotes,
+    groupAudit,
     sheetsProcessed,
     sheetsSkipped,
     growthSheetsImported: parsed.growthSheets.map((s) => s.name),

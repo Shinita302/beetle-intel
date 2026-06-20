@@ -183,6 +183,49 @@ export function ImportSpreadsheet({ beetles, growthEntries, userId, onImportConf
                 {hybridResult.skippedNotes.length > 3 ? '…' : ''}
               </p>
             )}
+            {hybridResult.groupAudit.length > 0 && (
+              <div className="mt-4 overflow-x-auto border border-gray-800 rounded-lg max-h-72 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-gray-900">
+                    <tr className="border-b border-gray-800">
+                      <th className="text-left py-2 px-2 text-gray-500">Species</th>
+                      <th className="text-left py-2 px-2 text-gray-500">Counts</th>
+                      <th className="text-left py-2 px-2 text-gray-500">Status</th>
+                      <th className="text-left py-2 px-2 text-gray-500">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hybridResult.groupAudit.map((entry, index) => (
+                      <tr key={`${entry.sourceRow}-${entry.species}-${index}`} className="border-b border-gray-800/50">
+                        <td className="py-2 px-2 text-gray-200">
+                          {entry.lineName || entry.species}
+                          <span className="block text-gray-500 font-mono">row {entry.sourceRow}</span>
+                        </td>
+                        <td className="py-2 px-2 text-gray-400 font-mono">
+                          {entry.total > 0
+                            ? `E${entry.eggs} L1${entry.l1} L2${entry.l2} L3${entry.l3} Pp${entry.prePupa} Pu${entry.pupa} A${entry.adult} = ${entry.total}`
+                            : '—'}
+                        </td>
+                        <td className="py-2 px-2">
+                          <Badge
+                            variant={
+                              entry.status === 'imported'
+                                ? 'success'
+                                : entry.status === 'rejected'
+                                  ? 'danger'
+                                  : 'warning'
+                            }
+                          >
+                            {entry.status}
+                          </Badge>
+                        </td>
+                        <td className="py-2 px-2 text-gray-400">{entry.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </Card>
 
           <Card>
