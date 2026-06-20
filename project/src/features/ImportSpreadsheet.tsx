@@ -469,14 +469,15 @@ export function ImportSpreadsheet({ beetles, growthEntries, onImportConfirmed }:
                     </div>
                     <Badge variant="success">Total: {group.total}</Badge>
                   </div>
-                  <div className="flex flex-wrap gap-3 text-xs text-gray-300">
-                    {group.l1 > 0 && <span>L1: {group.l1}</span>}
-                    {group.l2 > 0 && <span>L2: {group.l2}</span>}
-                    {group.l3 > 0 && <span>L3: {group.l3}</span>}
-                    {group.adult > 0 && <span>Adult: {group.adult}</span>}
-                    {group.eggs > 0 && <span>Eggs: {group.eggs}</span>}
-                    {group.pupa > 0 && <span>Pupa: {group.pupa}</span>}
-                    {group.prePupa > 0 && <span>Pre-Pupa: {group.prePupa}</span>}
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-x-4 gap-y-1 text-xs text-gray-300 mt-2">
+                    <span>Eggs: {group.eggs || '—'}</span>
+                    <span>L1: {group.l1 || '—'}</span>
+                    <span>L2: {group.l2 || '—'}</span>
+                    <span>L3: {group.l3 || '—'}</span>
+                    <span>Pre-pupa: {group.prePupa || '—'}</span>
+                    <span>Pupa: {group.pupa || '—'}</span>
+                    <span>Adult: {group.adult || '—'}</span>
+                    <span className="col-span-2 font-medium text-gray-100">Total: {group.total}</span>
                   </div>
                 </div>
               ))}

@@ -28,6 +28,7 @@ import {
   beetleLabel,
   pairingFertilityScore,
   totalInstarLarvaeInventory,
+  totalAdultsInventory,
   totalPopulationInventory,
 } from '../types';
 import { beetleCountTrend, larvalActivityTrend } from '../utils/dashboardMetrics';
@@ -122,6 +123,7 @@ export function Dashboard({
   const activeLarvae = hasInventory
     ? totalInstarLarvaeInventory(speciesInventory)
     : beetles.filter((b) => b.status === 'larva').length;
+  const totalAdults = hasInventory ? totalAdultsInventory(speciesInventory) : beetles.filter((b) => b.status === 'adult').length;
   const avgHatchRate = calcHatchRate(pairings);
   const avgFertility = calcFertilityScore(pairings);
   const growthData = getLarvalGrowthChart(beetles, growthEntries);
@@ -205,10 +207,11 @@ export function Dashboard({
           color="bg-amber-500/15 text-amber-400"
         />
         <StatCard
-          label="Avg Fertility"
-          value={`${avgFertility}`}
+          label={hasInventory ? 'Adults' : 'Avg Fertility'}
+          value={hasInventory ? totalAdults : avgFertility}
           icon={Flame}
           color="bg-teal-500/15 text-teal-400"
+          onClick={hasInventory ? () => onNavigate('inventory') : undefined}
         />
       </div>
 
