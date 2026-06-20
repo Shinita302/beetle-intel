@@ -184,7 +184,7 @@ export function Dashboard({
           value={totalPopulation}
           icon={Bug}
           color="bg-sky-500/15 text-sky-400"
-          trend={totalBeetlesTrend}
+          trend={totalBeetlesTrend ?? undefined}
           onClick={() => onNavigate(hasInventory ? 'inventory' : 'add-beetle')}
         />
         <StatCard
@@ -192,7 +192,7 @@ export function Dashboard({
           value={activeLarvae}
           icon={Sprout}
           color="bg-emerald-500/15 text-emerald-400"
-          trend={activeLarvaeTrend}
+          trend={activeLarvaeTrend ?? undefined}
           onClick={() => onNavigate('larval-growth')}
         />
         <StatCard
