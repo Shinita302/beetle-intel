@@ -1146,7 +1146,6 @@ function promotePopulationHeaderRows(interpreted: InterpretedRow[]): void {
 
 function rewireInterpretedGroupContext(interpreted: InterpretedRow[]): void {
   let currentGroup = '';
-  let activeGroupStage: ActiveGroupStage = '';
 
   for (const item of interpreted) {
     const meaning = item.user_meaning;
@@ -1156,17 +1155,9 @@ function rewireInterpretedGroupContext(interpreted: InterpretedRow[]): void {
       if (shouldPromoteToActiveGroup(speciesField)) {
         currentGroup = speciesField;
       }
-      activeGroupStage = headerStageFromFields(item.user_fields);
     }
 
     if (meaning === 'stage-count') {
-      const explicitStage = inventoryKeyFromLabel(item.user_fields.stage_status);
-      if (explicitStage && ['l1', 'l2', 'l3', 'eggs', 'pupa', 'prePupa'].includes(explicitStage)) {
-        // Keep header adult context for later numeric-only rows.
-      } else if (explicitStage === 'adult') {
-        activeGroupStage = 'adult';
-      }
-
       const sanitized = sanitizeStageRowFields(item.user_fields, currentGroup);
       item.user_fields = { ...sanitized };
       item.suggested_fields = { ...sanitizeStageRowFields(item.suggested_fields, currentGroup) };
@@ -1175,10 +1166,6 @@ function rewireInterpretedGroupContext(interpreted: InterpretedRow[]): void {
         item.user_fields.species_or_group = currentGroup;
         item.suggested_fields.species_or_group = currentGroup;
       }
-    }
-
-    if (meaning === 'empty' || meaning === 'individual-beetle') {
-      activeGroupStage = '';
     }
   }
 }
