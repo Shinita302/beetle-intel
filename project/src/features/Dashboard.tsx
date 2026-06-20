@@ -27,7 +27,7 @@ import type { Beetle, GrowthEntry, Pairing, PestRisk, SpeciesInventory } from '.
 import {
   beetleLabel,
   pairingFertilityScore,
-  totalActiveLarvaeInventory,
+  totalInstarLarvaeInventory,
   totalPopulationInventory,
 } from '../types';
 import { beetleCountTrend, larvalActivityTrend } from '../utils/dashboardMetrics';
@@ -120,14 +120,17 @@ export function Dashboard({
     ? totalPopulationInventory(speciesInventory)
     : beetles.length;
   const activeLarvae = hasInventory
-    ? totalActiveLarvaeInventory(speciesInventory)
+    ? totalInstarLarvaeInventory(speciesInventory)
     : beetles.filter((b) => b.status === 'larva').length;
   const avgHatchRate = calcHatchRate(pairings);
   const avgFertility = calcFertilityScore(pairings);
   const growthData = getLarvalGrowthChart(beetles, growthEntries);
   const fertilityData = getFertilityRanking(beetles, pairings);
   const totalBeetlesTrend = hasInventory ? null : beetleCountTrend(beetles);
-  const activeLarvaeTrend = larvalActivityTrend(beetles, growthEntries);
+  const activeLarvaeTrend =
+    hasInventory && activeLarvae === 0 && growthEntries.length === 0
+      ? null
+      : larvalActivityTrend(beetles, growthEntries);
   const openPestRisks = pestRisks.filter((pr) => pr.status === 'open');
   const recentPairings = [...pairings].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
 

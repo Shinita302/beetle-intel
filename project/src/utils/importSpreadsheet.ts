@@ -7,16 +7,17 @@ import type {
   GrowthStage,
   SpeciesInventory,
 } from '../types';
-import { emptySpeciesInventory } from '../types';
+import { emptySpeciesInventory, inventoryGroupId, inventoryGroupKey } from '../types';
 import {
   cellHasSizeUnit,
   cellHasWeightUnit,
   metricsFromCombinedCell,
   parseStageCombinedCell,
   parseStageRowMetrics,
+  parseGenerationFromStageLabel,
+  parseStageLabelToLifecycle,
   PLAIN_NUMBERS_AS_COUNTS_WARNING,
 } from './spreadsheetMetrics';
-import { inventoryKeyForLifecycle } from './spreadsheetMetrics';
 import type { LifecycleStage } from '../types/lifecycle';
 
 interface DraftStageNotes {
@@ -74,12 +75,24 @@ function combineStageNotes(notes: DraftStageNotes): string {
 
 function mergeDraftInventory(
   map: Map<string, SpeciesInventory>,
-  species: string,
+  group: { species: string; lineName?: string; generation?: string; origin?: string; notes?: string; sourceFile?: string; sourceSheet?: string; importedAt?: string },
   counts: DraftInventoryCounts
 ) {
-  const key = species.trim();
-  if (!key) return;
-  const row = map.get(key.toLowerCase()) ?? emptySpeciesInventory(key);
+  const species = group.species.trim();
+  if (!species) return;
+  const mapKey = inventoryGroupKey(species, group.lineName, group.generation);
+  const row =
+    map.get(mapKey) ??
+    emptySpeciesInventory(species, inventoryGroupId(species, group.lineName, group.generation));
+  row.lineName = group.lineName || row.lineName;
+  row.generation = group.generation || row.generation;
+  row.origin = group.origin || row.origin;
+  if (group.notes) {
+    row.notes = row.notes ? `${row.notes}; ${group.notes}` : group.notes;
+  }
+  if (group.sourceFile) row.sourceFile = group.sourceFile;
+  if (group.sourceSheet) row.sourceSheet = group.sourceSheet;
+  if (group.importedAt) row.importedAt = group.importedAt;
   row.eggs += counts.eggs;
   row.l1 += counts.l1;
   row.l2 += counts.l2;
@@ -88,7 +101,7 @@ function mergeDraftInventory(
   row.pupa += counts.pupa;
   row.adult += counts.adult;
   row.updatedAt = new Date().toISOString().slice(0, 10);
-  map.set(key.toLowerCase(), row);
+  map.set(mapKey, row);
 }
 
 function instarToGrowthStage(instar: keyof DraftInstarWeights): GrowthStage {
@@ -165,6 +178,7 @@ export interface RowFieldDraft {
 
 export interface InterpretedRow {
   source_row: number;
+  source_sheet?: string;
   original_cells: string[];
   detected_meaning: RowMeaning;
   user_meaning: RowMeaning;
@@ -180,15 +194,40 @@ export interface StructuredImportBuild {
   beetles: Beetle[];
   growthEntries: GrowthEntry[];
   speciesInventory: SpeciesInventory[];
+  populationGroups: PopulationGroupPreview[];
   stageRecords: GeneratedStageRecord[];
   validationWarnings: string[];
-  summary: {
-    sourceRows: number;
-    importedBeetles: number;
-    importedGrowthEntries: number;
-    importedSpecies: number;
-    skippedRows: number;
-  };
+  summary: ImportSummary;
+}
+
+export interface PopulationGroupPreview {
+  species: string;
+  lineName: string;
+  generation: string;
+  origin: string;
+  category: string;
+  eggs: number;
+  l1: number;
+  l2: number;
+  l3: number;
+  prePupa: number;
+  pupa: number;
+  adult: number;
+  total: number;
+  sourceSheet?: string;
+}
+
+export interface ImportSummary {
+  sourceRows: number;
+  importedBeetles: number;
+  importedGrowthEntries: number;
+  inventoryGroupsCreated: number;
+  totalPopulation: number;
+  importedSpecies: number;
+  skippedRows: number;
+  sheetsProcessed: string[];
+  sheetsSkipped: string[];
+  growthSheetsImported: string[];
 }
 
 export interface GeneratedStageRecord {
@@ -196,13 +235,14 @@ export interface GeneratedStageRecord {
   species: string;
   stage: string;
   count: string;
-  attachedToBeetle: string;
+  attachedToGroup: string;
 }
 
 export interface StageDetection {
   label: string;
   beetleStatus: BeetleStatus | '';
   instar: 'L1' | 'L2' | 'L3' | '';
+  generation?: string;
 }
 
 export const DEFAULT_DEVELOPMENTAL_STAGE_KEYWORDS = [
@@ -246,7 +286,7 @@ const SPECIES_HINTS = [
 ];
 
 const ROW_MEANING_LABELS: Record<RowMeaning, string> = {
-  'group-header': 'Group header',
+  'group-header': 'Population group',
   'stage-count': 'Stage / count row',
   'individual-beetle': 'Individual beetle',
   note: 'Note row',
@@ -332,8 +372,16 @@ export function detectDevelopmentalStage(text: string): StageDetection | null {
   }
 
   if (/^eggs?$/i.test(trimmed)) return { label: 'Egg', beetleStatus: 'larva', instar: '' };
+  if (/^pre[-\s]?pupa(e)?$/i.test(trimmed)) return { label: 'Pre-Pupa', beetleStatus: 'pupa', instar: '' };
   if (/^larva(e)?$/i.test(trimmed)) return { label: 'Larva', beetleStatus: 'larva', instar: '' };
   if (/^pupa(e)?$/i.test(trimmed)) return { label: 'Pupa', beetleStatus: 'pupa', instar: '' };
+
+  const adultGenMatch = trimmed.match(/^adults?\s*(?:\(\s*(?:CB)?(F\d+\+?)\s*\)|\s+(?:CB)?(F\d+\+?))$/i);
+  if (adultGenMatch) {
+    const generation = parseGenerationFromStageLabel(trimmed);
+    return { label: trimmed, beetleStatus: 'adult', instar: '', generation };
+  }
+
   if (/^adults?$/i.test(trimmed)) return { label: 'Adult', beetleStatus: 'adult', instar: '' };
   if (/^juveniles?$/i.test(trimmed)) return { label: 'Juvenile', beetleStatus: 'larva', instar: '' };
   if (/^nymphs?$/i.test(trimmed)) return { label: 'Nymph', beetleStatus: 'larva', instar: '' };
@@ -356,12 +404,25 @@ function isNumericOrMeasurement(value: string): boolean {
 }
 
 function stageDetectionToLifecycle(stage: StageDetection): LifecycleStage | null {
+  const fromLabel = parseStageLabelToLifecycle(stage.label);
+  if (fromLabel) return fromLabel;
   if (stage.instar === 'L1') return 'L1';
   if (stage.instar === 'L2') return 'L2';
   if (stage.instar === 'L3') return 'L3';
   if (stage.label === 'Egg') return 'egg';
-  if (stage.label === 'Pupa') return 'pupa';
+  if (stage.label === 'Pupa' || stage.label === 'Pre-Pupa') return 'pupa';
   if (stage.beetleStatus === 'adult' || stage.label === 'Adult') return 'adult';
+  return null;
+}
+
+function inventoryKeyFromStage(stage: StageDetection): keyof DraftInventoryCounts | null {
+  if (stage.instar === 'L1') return 'l1';
+  if (stage.instar === 'L2') return 'l2';
+  if (stage.instar === 'L3') return 'l3';
+  if (stage.label === 'Egg') return 'eggs';
+  if (stage.label === 'Pre-Pupa') return 'prePupa';
+  if (stage.label === 'Pupa') return 'pupa';
+  if (stage.beetleStatus === 'adult' || /^adult/i.test(stage.label)) return 'adult';
   return null;
 }
 
@@ -494,6 +555,11 @@ function inferSpeciesFromText(text: string): string {
     return words[0];
   }
   return '';
+}
+
+function looksLikeBeetleId(cell: string): boolean {
+  const trimmed = cell.trim();
+  return /^B[-_]?\d+/i.test(trimmed) || /^[A-Z]{1,3}-\d+$/i.test(trimmed);
 }
 
 function looksLikeName(cell: string): boolean {
@@ -790,7 +856,37 @@ function extractNonNumericText(cells: string[]): string[] {
 }
 
 function isAdultLabel(value: string): boolean {
-  return detectDevelopmentalStage(value)?.label === 'Adult';
+  const detected = detectDevelopmentalStage(value);
+  return detected?.beetleStatus === 'adult';
+}
+
+function isHeadcountCategory(value: string): boolean {
+  return /headcount|population|inventory/i.test(value.trim());
+}
+
+function isOriginLabel(value: string): boolean {
+  const t = value.trim();
+  return /^CB$/i.test(t) || /origin/i.test(t);
+}
+
+/** Breeder inventory header: species/line + headcount or adult(F4) generation row */
+function isPopulationGroupHeader(cells: string[], fullText: string): boolean {
+  if (/headcount/i.test(fullText)) return true;
+
+  const textCells = cells.map((c) => c.trim()).filter(Boolean);
+  const hasAdultGen = textCells.some((c) => {
+    const stage = detectDevelopmentalStage(c);
+    return stage?.beetleStatus === 'adult' && (stage.generation || /\(\s*F\d+/i.test(c));
+  });
+  const nonMetaCells = textCells.filter(
+    (c) => !isHeadcountCategory(c) && !isOriginLabel(c) && !/unknown/i.test(c)
+  );
+  const hasSpeciesLine = nonMetaCells.some(
+    (c) => !isDevelopmentalStageLabel(c) && c.length > 2 && !isPureNumber(c)
+  );
+  if (hasAdultGen && hasSpeciesLine) return true;
+
+  return isGroupAnchorRow(cells, fullText);
 }
 
 function sanitizeBeetleNameCandidate(value: string): string {
@@ -915,31 +1011,29 @@ function interpretSingleRow(row: RawSheetRow, activeGroup: string): InterpretedR
   if (genMatch) fields.generation = parseGeneration(genMatch);
   if (dateMatch) fields.date = parseDateLoose(dateMatch);
 
-  // Priority 1: group header / profile anchor (before stage rows)
-  if (isGroupAnchorRow(cells, fullText)) {
+  // Priority 1: population group header (inventory/headcount — not individual beetles)
+  if (isPopulationGroupHeader(cells, fullText)) {
     meaning = 'group-header';
-    confidence = 88;
-    const headerFields = parseGroupHeaderFields(cells, fullText);
-    const leadingName = sanitizeBeetleNameCandidate(extractLeadingNameColumn(cells));
-    fields.beetle_name = sanitizeBeetleNameCandidate(headerFields.beetleName) || leadingName;
-    fields.species_or_group = headerFields.species || fields.beetle_name || speciesText;
-    fields.stage_status =
-      headerFields.profileStatus === 'adult'
-        ? 'Adult'
-        : headerFields.profileStatus === 'pupa'
-          ? 'Pupa'
-          : headerFields.profileStatus === 'larva'
-            ? 'Larva'
-            : '';
-    if (!fields.stage_status && textCells.some((cell) => isAdultLabel(cell))) {
-      fields.stage_status = 'Adult';
+    confidence = 90;
+    const headerFields = parsePopulationHeaderFields(cells, fullText);
+    fields.species_or_group = headerFields.species || headerFields.lineName || speciesText;
+    fields.beetle_name = '';
+    fields.generation = headerFields.generation || fields.generation;
+    fields.notes = headerFields.category ? `Category: ${headerFields.category}` : '';
+    if (headerFields.origin) {
+      fields.notes = fields.notes
+        ? `${fields.notes}; Origin: ${headerFields.origin}`
+        : `Origin: ${headerFields.origin}`;
     }
-    const numericCellsOnHeader = extractNumbers(cells);
-    if (numericCellsOnHeader[0] && fields.stage_status === 'Adult') {
-      fields.count = numericCellsOnHeader[0];
-      if (numericCellsOnHeader[1]) fields.weight = numericCellsOnHeader[1];
+    if (headerFields.headerAdultCount) {
+      fields.count = String(headerFields.headerAdultCount);
+      fields.stage_status = headerFields.headerStageLabel || 'Adult';
+    } else if (textCells.some((cell) => isAdultLabel(cell))) {
+      fields.stage_status = textCells.find((cell) => isAdultLabel(cell)) ?? 'Adult';
     }
-    notes.push('Beetle profile header — name only here; L1/L2/L3/Adult counts go to stage notes below');
+    notes.push(
+      'Population group header — stage counts (L1/L2/L3/Adult) attach to this group, not individual beetles'
+    );
   }
 
   // Priority 2: developmental stage rows (L1/L2/L3, etc.) — never beetle names
@@ -985,8 +1079,9 @@ function interpretSingleRow(row: RawSheetRow, activeGroup: string): InterpretedR
     notes.push('Long free-text note');
   }
 
-  // Priority 5: Individual beetle
+  // Priority 5: Individual beetle — only with explicit ID or clear one-beetle row
   else {
+    const idCell = cells.find((cell) => looksLikeBeetleId(cell));
     const nameCandidate = textCells.find(
       (cell) =>
         looksLikeName(cell) &&
@@ -994,11 +1089,16 @@ function interpretSingleRow(row: RawSheetRow, activeGroup: string): InterpretedR
         !isDevelopmentalStageLabel(cell) &&
         !isAdultLabel(cell)
     );
-    if (nameCandidate && (sexFromText || speciesText)) {
+    if (idCell || (nameCandidate && (sexFromText || speciesText))) {
       meaning = 'individual-beetle';
-      confidence = 82;
-      fields.beetle_name = nameCandidate;
-      notes.push('Name-like value with sex/species context');
+      confidence = idCell ? 92 : 82;
+      fields.beetle_name = nameCandidate || idCell || '';
+      if (idCell && !fields.beetle_name) fields.beetle_name = idCell;
+      notes.push(
+        idCell
+          ? 'Individual beetle row with explicit ID'
+          : 'Name-like value with sex/species context'
+      );
     } else if (
       textCells.length === 1 &&
       !isDevelopmentalStageLabel(textCells[0]) &&
@@ -1043,6 +1143,7 @@ function interpretSingleRow(row: RawSheetRow, activeGroup: string): InterpretedR
 
   return {
     source_row: row.source_row,
+    source_sheet: row.source_sheet,
     original_cells: [...cells],
     detected_meaning: meaning,
     user_meaning: meaning,
@@ -1121,6 +1222,53 @@ function splitNameAndStageMarker(text: string): { name: string; stage: StageDete
   return { name: trimmed, stage: null };
 }
 
+function parsePopulationHeaderFields(cells: string[], fullText: string): {
+  species: string;
+  lineName: string;
+  generation: string;
+  origin: string;
+  category: string;
+  headerAdultCount: number;
+  headerStageLabel: string;
+} {
+  const textCells = cells.map((c) => c.trim()).filter(Boolean);
+  const category = textCells.find((c) => isHeadcountCategory(c)) ?? '';
+  const originCell = textCells.find((c) => isOriginLabel(c)) ?? '';
+  const origin = /^CB$/i.test(originCell) ? 'CB' : originCell.replace(/origin/i, '').trim();
+
+  const adultCell = textCells.find((c) => {
+    const stage = detectDevelopmentalStage(c);
+    return stage?.beetleStatus === 'adult';
+  });
+  const generation = adultCell
+    ? parseGenerationFromStageLabel(adultCell) || parseGeneration(fullText)
+    : parseGeneration(fullText);
+
+  const speciesCandidates = textCells.filter(
+    (c) =>
+      !isHeadcountCategory(c) &&
+      !isOriginLabel(c) &&
+      !isDevelopmentalStageLabel(c) &&
+      !/unknown/i.test(c) &&
+      c.length > 2
+  );
+  const lineName = speciesCandidates[0] ?? inferSpeciesFromText(fullText) ?? '';
+  const species = inferSpeciesFromText(lineName) || inferSpeciesFromText(fullText) || lineName;
+
+  const numericCells = extractNumbers(cells);
+  const headerAdultCount = adultCell && numericCells[0] ? parseNumeric(numericCells[0]) : 0;
+
+  return {
+    species: species.trim(),
+    lineName: lineName.trim(),
+    generation,
+    origin,
+    category,
+    headerAdultCount,
+    headerStageLabel: adultCell ?? 'Adult',
+  };
+}
+
 function parseGroupHeaderFields(cells: string[], fullText: string): {
   beetleName: string;
   species: string;
@@ -1169,9 +1317,11 @@ function stageNoteKeyFromDetection(stage: StageDetection): keyof DraftStageNotes
   if (stage.instar === 'L1') return 'l1';
   if (stage.instar === 'L2') return 'l2';
   if (stage.instar === 'L3') return 'l3';
-  if (stage.beetleStatus === 'adult' || stage.label === 'Adult') return 'adult';
-  if (stage.label === 'Pupa') return 'l3';
-  if (stage.label === 'Egg' || stage.label === 'Larva') return 'l1';
+  if (stage.beetleStatus === 'adult' || stage.label === 'Adult' || /^adult/i.test(stage.label)) return 'adult';
+  if (stage.label === 'Pupa') return 'pupa';
+  if (stage.label === 'Pre-Pupa') return 'pupa';
+  if (stage.label === 'Egg') return 'egg';
+  if (stage.label === 'Larva') return 'l1';
   return null;
 }
 
@@ -1205,70 +1355,105 @@ function appendStageNote(existing: string, addition: string): string {
   return `${existing}; ${addition}`;
 }
 
-interface GroupBeetleDraft {
+interface InventoryGroupDraft {
   sourceRow: number;
-  name: string;
+  sourceSheet?: string;
   species: string;
-  status: BeetleStatus;
-  sex: BeetleSex;
+  lineName: string;
   generation: string;
-  bloodline: string;
-  stageNotes: DraftStageNotes;
-  instarWeights: DraftInstarWeights;
+  origin: string;
+  category: string;
+  notes: string;
   inventoryCounts: DraftInventoryCounts;
-  adultWeightImport: number;
-  adultSizeImport: number;
 }
 
-function createGroupDraft(row: InterpretedRow, cells: string[]): GroupBeetleDraft | null {
+function createInventoryGroupDraft(row: InterpretedRow, cells: string[]): InventoryGroupDraft | null {
   const fullText = row.original_cells.join(' | ').trim();
-  const header = parseGroupHeaderFields(cells, fullText);
-  const name = sanitizeBeetleNameCandidate(row.user_fields.beetle_name || header.beetleName);
+  const header = parsePopulationHeaderFields(cells, fullText);
+  const species =
+    resolveParentSpecies(row.user_fields.species_or_group, '') ||
+    header.species ||
+    header.lineName;
 
-  if (!name) {
+  if (!species && !header.lineName) {
     return null;
   }
 
-  const profileStatus = header.profileStatus;
+  const lineName = header.lineName || row.user_fields.species_or_group || species;
+  const notesParts = [row.user_fields.notes?.trim(), header.category ? `Category: ${header.category}` : '']
+    .filter(Boolean)
+    .join('; ');
 
-  return {
+  const draft: InventoryGroupDraft = {
     sourceRow: row.source_row,
-    name,
-    species: resolveParentSpecies(row.user_fields.species_or_group, header.species || name),
-    status: profileStatus,
-    sex: parseSex(row.user_fields.sex) || 'unknown',
-    generation: row.user_fields.generation,
-    bloodline: '',
-    stageNotes: emptyStageNotes(),
-    instarWeights: emptyInstarWeights(),
+    sourceSheet: row.source_sheet,
+    species: species || lineName,
+    lineName,
+    generation: row.user_fields.generation || header.generation,
+    origin: header.origin,
+    category: header.category,
+    notes: notesParts,
     inventoryCounts: emptyInventoryCounts(),
-    adultWeightImport: 0,
-    adultSizeImport: 0,
   };
+
+  if (header.headerAdultCount > 0) {
+    draft.inventoryCounts.adult = header.headerAdultCount;
+  }
+
+  return draft;
 }
 
-function finalizeGroupDraft(
-  draft: GroupBeetleDraft,
-  beetleIndex: number,
-  existingBeetleCount: number,
+function finalizeInventoryGroup(
+  draft: InventoryGroupDraft,
+  sourceFile: string,
   now: string
-): Beetle {
+): SpeciesInventory {
+  const row = emptySpeciesInventory(
+    draft.species,
+    inventoryGroupId(draft.species, draft.lineName, draft.generation)
+  );
+  row.lineName = draft.lineName;
+  row.generation = draft.generation;
+  row.origin = draft.origin;
+  row.notes = draft.notes;
+  row.sourceFile = sourceFile;
+  row.sourceSheet = draft.sourceSheet;
+  row.importedAt = now;
+  row.eggs = draft.inventoryCounts.eggs;
+  row.l1 = draft.inventoryCounts.l1;
+  row.l2 = draft.inventoryCounts.l2;
+  row.l3 = draft.inventoryCounts.l3;
+  row.prePupa = draft.inventoryCounts.prePupa;
+  row.pupa = draft.inventoryCounts.pupa;
+  row.adult = draft.inventoryCounts.adult;
+  row.updatedAt = now.slice(0, 10);
+  return row;
+}
+
+function inventoryGroupPreviewFromDraft(draft: InventoryGroupDraft): PopulationGroupPreview {
+  const counts = draft.inventoryCounts;
+  const total =
+    counts.eggs + counts.l1 + counts.l2 + counts.l3 + counts.prePupa + counts.pupa + counts.adult;
   return {
-    id: nextBeetleId(existingBeetleCount, beetleIndex),
-    name: draft.name,
     species: draft.species,
-    sex: draft.sex,
-    source: `import-row-${draft.sourceRow}`,
+    lineName: draft.lineName,
     generation: draft.generation,
-    notes: combineStageNotes(draft.stageNotes),
-    bloodline: draft.bloodline,
-    status: draft.status,
-    createdAt: now,
+    origin: draft.origin,
+    category: draft.category,
+    eggs: counts.eggs,
+    l1: counts.l1,
+    l2: counts.l2,
+    l3: counts.l3,
+    prePupa: counts.prePupa,
+    pupa: counts.pupa,
+    adult: counts.adult,
+    total,
+    sourceSheet: draft.sourceSheet,
   };
 }
 
-function applyStageRowToDraft(
-  draft: GroupBeetleDraft,
+function applyStageRowToInventoryDraft(
+  draft: InventoryGroupDraft,
   row: InterpretedRow,
   stageRecords: GeneratedStageRecord[],
   validationWarnings: string[]
@@ -1276,17 +1461,14 @@ function applyStageRowToDraft(
   const f = row.user_fields;
   const stageLabel = f.stage_status || '';
   const stage = detectDevelopmentalStage(stageLabel);
-  const noteKey = stage ? stageNoteKeyFromDetection(stage) : null;
-  const weightGrams = parseNumeric(f.weight);
   const countVal = parseNumeric(f.count);
-  const lifecycle = stage ? stageDetectionToLifecycle(stage) : null;
-  const inventoryKey = lifecycle ? inventoryKeyForLifecycle(lifecycle) : null;
+  const inventoryKey = stage ? inventoryKeyFromStage(stage) : null;
 
   if (inventoryKey && countVal > 0) {
     draft.inventoryCounts[inventoryKey] = countVal;
   }
 
-  if (countVal > 0 && weightGrams === 0 && !f.weight) {
+  if (countVal > 0 && !f.weight) {
     const rowText = row.original_cells.join(' ');
     if (!cellHasWeightUnit(rowText) && !cellHasSizeUnit(rowText)) {
       validationWarnings.push(
@@ -1295,31 +1477,8 @@ function applyStageRowToDraft(
     }
   }
 
-  if (noteKey === 'l1' || noteKey === 'l2' || noteKey === 'l3') {
-    if (weightGrams > 0) {
-      draft.instarWeights[noteKey] = weightGrams;
-    }
-    const noteContent = buildInstarNoteContent(f);
-    if (noteContent) {
-      draft.stageNotes[noteKey] = appendStageNote(draft.stageNotes[noteKey], noteContent);
-    }
-  } else if (noteKey === 'adult') {
-    if (weightGrams > 0) {
-      draft.adultWeightImport = weightGrams;
-    }
-    const sizeVal = parseNumeric(f.size);
-    if (sizeVal > 0) {
-      draft.adultSizeImport = sizeVal;
-    }
-    const noteContent = buildAdultStageNoteContent(f);
-    if (noteContent) {
-      draft.stageNotes.adult = appendStageNote(draft.stageNotes.adult, noteContent);
-    }
-  } else if (stageLabel) {
-    const noteContent = buildInstarNoteContent(f);
-    if (noteContent) {
-      draft.stageNotes.adult = appendStageNote(draft.stageNotes.adult, `${stageLabel}: ${noteContent}`);
-    }
+  if (stage?.generation && !draft.generation) {
+    draft.generation = stage.generation;
   }
 
   stageRecords.push({
@@ -1327,7 +1486,7 @@ function applyStageRowToDraft(
     species: draft.species,
     stage: stageLabel || 'Unknown',
     count: f.count,
-    attachedToBeetle: draft.name,
+    attachedToGroup: draft.lineName || draft.species,
   });
 }
 
@@ -1348,82 +1507,86 @@ function findBlockSpeciesName(
   return currentGroup;
 }
 
-function openGroupDraftFromContext(
+function openInventoryGroupFromContext(
   row: InterpretedRow,
   cells: string[],
   interpreted: InterpretedRow[],
   rowIndex: number,
   currentGroup: string
-): GroupBeetleDraft | null {
-  const name = sanitizeBeetleNameCandidate(
-    row.user_fields.beetle_name ||
-      findBlockSpeciesName(interpreted, rowIndex, currentGroup) ||
-      extractLeadingNameColumn(cells)
-  );
+): InventoryGroupDraft | null {
+  const lineName =
+    sanitizeBeetleNameCandidate(row.user_fields.species_or_group) ||
+    findBlockSpeciesName(interpreted, rowIndex, currentGroup) ||
+    extractLeadingNameColumn(cells);
 
-  if (!name) {
+  if (!lineName) {
     return null;
   }
 
-  const header = parseGroupHeaderFields(cells, row.original_cells.join(' | ').trim());
+  const header = parsePopulationHeaderFields(cells, row.original_cells.join(' | ').trim());
 
   return {
     sourceRow: row.source_row,
-    name,
-    species: resolveParentSpecies(row.user_fields.species_or_group, header.species || name),
-    status: 'larva',
-    sex: parseSex(row.user_fields.sex) || 'unknown',
-    generation: row.user_fields.generation,
-    bloodline: '',
-    stageNotes: emptyStageNotes(),
-    instarWeights: emptyInstarWeights(),
+    sourceSheet: row.source_sheet,
+    species: resolveParentSpecies(row.user_fields.species_or_group, header.species || lineName),
+    lineName,
+    generation: row.user_fields.generation || header.generation,
+    origin: header.origin,
+    category: header.category,
+    notes: '',
     inventoryCounts: emptyInventoryCounts(),
-    adultWeightImport: 0,
-    adultSizeImport: 0,
   };
 }
 
-/** Step 2: generate beetle profiles only from user-confirmed rows */
+/** Step 2: generate inventory groups and individual beetles from user-confirmed rows */
 export function generateRecordsFromConfirmed(params: {
   interpreted: InterpretedRow[];
   existingBeetles: Beetle[];
   existingGrowthEntries: GrowthEntry[];
   growthSheets?: { name: string; rows: RawSheetRow[] }[];
+  sourceFileName?: string;
+  sheetNames?: string[];
 }): StructuredImportBuild {
-  const { interpreted, existingBeetles, existingGrowthEntries, growthSheets = [] } = params;
+  const {
+    interpreted,
+    existingBeetles,
+    existingGrowthEntries,
+    growthSheets = [],
+    sourceFileName = '',
+    sheetNames = [],
+  } = params;
   const beetles: Beetle[] = [];
   const growthEntries: GrowthEntry[] = [];
   const speciesInventoryMap = new Map<string, SpeciesInventory>();
+  const populationGroups: PopulationGroupPreview[] = [];
   const stageRecords: GeneratedStageRecord[] = [];
   const validationWarnings: string[] = [];
-  const now = new Date().toISOString().slice(0, 10);
+  const now = new Date().toISOString();
   let currentGroup = '';
   let skippedRows = 0;
-  let groupDraft: GroupBeetleDraft | null = null;
+  let groupDraft: InventoryGroupDraft | null = null;
 
-  const flushGroupDraft = () => {
+  const flushInventoryGroupDraft = () => {
     if (!groupDraft) return;
-
-    const nameWarning = validateGeneratedSpecies(groupDraft.name, `row ${groupDraft.sourceRow} beetle name`);
-    if (nameWarning) {
-      validationWarnings.push(nameWarning);
-      groupDraft = null;
-      return;
-    }
 
     const speciesWarning = validateGeneratedSpecies(groupDraft.species, `row ${groupDraft.sourceRow}`);
     if (speciesWarning) validationWarnings.push(speciesWarning);
 
-    const beetle = finalizeGroupDraft(groupDraft, beetles.length, existingBeetles.length, now);
-    beetles.push(beetle);
-    mergeDraftInventory(speciesInventoryMap, beetle.species, groupDraft.inventoryCounts);
-    pushDraftGrowthEntries(
-      growthEntries,
-      beetle.id,
-      groupDraft.instarWeights,
-      groupDraft.stageNotes,
-      now
+    mergeDraftInventory(
+      speciesInventoryMap,
+      {
+        species: groupDraft.species,
+        lineName: groupDraft.lineName,
+        generation: groupDraft.generation,
+        origin: groupDraft.origin,
+        notes: groupDraft.notes,
+        sourceFile: sourceFileName,
+        sourceSheet: groupDraft.sourceSheet,
+        importedAt: now,
+      },
+      groupDraft.inventoryCounts
     );
+    populationGroups.push(inventoryGroupPreviewFromDraft(groupDraft));
     groupDraft = null;
   };
 
@@ -1438,25 +1601,30 @@ export function generateRecordsFromConfirmed(params: {
     }
 
     if (meaning === 'group-header') {
-      flushGroupDraft();
+      flushInventoryGroupDraft();
 
-      const draft = createGroupDraft(row, cells);
+      const draft = createInventoryGroupDraft(row, cells);
       if (draft) {
         groupDraft = draft;
-        if (shouldPromoteToActiveGroup(draft.species)) {
+        if (shouldPromoteToActiveGroup(draft.lineName)) {
+          currentGroup = draft.lineName;
+        } else if (shouldPromoteToActiveGroup(draft.species)) {
           currentGroup = draft.species;
-        } else if (shouldPromoteToActiveGroup(draft.name)) {
-          currentGroup = draft.name;
         }
 
-        if (f.count || f.weight) {
-          applyStageRowToDraft(groupDraft, { ...row, user_fields: f }, stageRecords, validationWarnings);
+        if (f.count || f.weight || f.stage_status) {
+          applyStageRowToInventoryDraft(
+            groupDraft,
+            { ...row, user_fields: f },
+            stageRecords,
+            validationWarnings
+          );
         }
       } else {
         const warning = validateGeneratedSpecies(f.species_or_group, `row ${row.source_row} group header`);
         if (warning) validationWarnings.push(warning);
         validationWarnings.push(
-          `Row ${row.source_row}: could not derive a beetle name from group header — stage labels cannot be beetle names.`
+          `Row ${row.source_row}: could not derive a population group from header — check species/line name.`
         );
         skippedRows += 1;
       }
@@ -1472,23 +1640,22 @@ export function generateRecordsFromConfirmed(params: {
 
       if (meaning === 'stage-count' && hasStageData) {
         if (!groupDraft) {
-          const opened = openGroupDraftFromContext(row, cells, interpreted, rowIndex, currentGroup);
+          const opened = openInventoryGroupFromContext(row, cells, interpreted, rowIndex, currentGroup);
           if (opened) {
             groupDraft = opened;
-            if (shouldPromoteToActiveGroup(opened.name)) currentGroup = opened.name;
+            if (shouldPromoteToActiveGroup(opened.lineName)) currentGroup = opened.lineName;
           }
         }
 
         if (!groupDraft) {
           validationWarnings.push(
-            `Row ${row.source_row}: stage row "${stageLabel || 'unknown'}" has no parent group header — add a name row (e.g. "Hercules adult") or put the beetle name in the first column.`
+            `Row ${row.source_row}: stage row "${stageLabel || 'unknown'}" has no parent population group — add a header row (e.g. "Hercules Hercules | headcount | adult(F4)").`
           );
           skippedRows += 1;
           return;
         }
 
-        applyStageRowToDraft(groupDraft, { ...row, user_fields: f }, stageRecords, validationWarnings);
-        skippedRows += 1;
+        applyStageRowToInventoryDraft(groupDraft, { ...row, user_fields: f }, stageRecords, validationWarnings);
       } else {
         skippedRows += 1;
       }
@@ -1496,7 +1663,7 @@ export function generateRecordsFromConfirmed(params: {
     }
 
     if (meaning === 'individual-beetle') {
-      flushGroupDraft();
+      flushInventoryGroupDraft();
 
       const species = resolveParentSpecies(f.species_or_group, row.inherit_group ? currentGroup : '');
       if (shouldPromoteToActiveGroup(f.species_or_group)) {
@@ -1527,7 +1694,7 @@ export function generateRecordsFromConfirmed(params: {
         notes: f.notes?.trim() ?? '',
         bloodline: '',
         status: stage,
-        createdAt: now,
+        createdAt: now.slice(0, 10),
       });
 
       const rowText = row.original_cells.join(' ');
@@ -1538,14 +1705,14 @@ export function generateRecordsFromConfirmed(params: {
         growthEntries.push({
           id: `GE-${String(existingGrowthEntries.length + growthEntries.length + 1).padStart(3, '0')}`,
           beetleId,
-          date: f.date || now,
+          date: f.date || now.slice(0, 10),
           stage: instarFromStageLabel(stageLabel) as GrowthStage,
           weight: growthWeight,
           temperature: 0,
           humidity: 0,
           substrate: 'Flake Soil',
           notes: f.notes,
-          createdAt: now,
+          createdAt: now.slice(0, 10),
         });
       }
       return;
@@ -1554,7 +1721,7 @@ export function generateRecordsFromConfirmed(params: {
     skippedRows += 1;
   });
 
-  flushGroupDraft();
+  flushInventoryGroupDraft();
 
   if (growthSheets.length > 0) {
     const sheetImport = importGrowthEntriesFromSheets(
@@ -1566,24 +1733,42 @@ export function generateRecordsFromConfirmed(params: {
     growthEntries.push(...sheetImport.growthEntries);
   }
 
+  const speciesInventory = Array.from(speciesInventoryMap.values());
+  const inventorySheetNames = new Set(
+    interpreted.map((r) => r.source_sheet).filter(Boolean) as string[]
+  );
+  const growthSheetNames = new Set(growthSheets.map((s) => s.name));
+  const sheetsProcessed = sheetNames.filter((n) => inventorySheetNames.has(n) || growthSheetNames.has(n));
+  const sheetsSkipped = sheetNames.filter((n) => !sheetsProcessed.includes(n));
+
   return {
     beetles,
     growthEntries,
-    speciesInventory: Array.from(speciesInventoryMap.values()),
+    speciesInventory,
+    populationGroups,
     stageRecords,
     validationWarnings: [...new Set(validationWarnings)],
     summary: {
       sourceRows: interpreted.length,
       importedBeetles: beetles.length,
       importedGrowthEntries: growthEntries.length,
-      importedSpecies: speciesInventoryMap.size,
+      inventoryGroupsCreated: populationGroups.length,
+      totalPopulation: speciesInventory.reduce(
+        (sum, row) =>
+          sum + row.eggs + row.l1 + row.l2 + row.l3 + row.prePupa + row.pupa + row.adult,
+        0
+      ),
+      importedSpecies: speciesInventory.length,
       skippedRows,
+      sheetsProcessed,
+      sheetsSkipped,
+      growthSheetsImported: growthSheets.map((s) => s.name),
     },
   };
 }
 
 export const ROW_MEANING_OPTIONS: { value: RowMeaning; label: string }[] = [
-  { value: 'group-header', label: 'Group header' },
+  { value: 'group-header', label: 'Population group' },
   { value: 'stage-count', label: 'Stage / count row' },
   { value: 'individual-beetle', label: 'Individual beetle' },
   { value: 'note', label: 'Note row' },

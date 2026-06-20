@@ -21,10 +21,18 @@ export interface Beetle {
   createdAt: string;
 }
 
-/** Collection-level population counts per species. */
+/** Collection-level population counts per species/line (inventory group). */
 export interface SpeciesInventory {
   id: string;
   species: string;
+  /** Line or group label from spreadsheet (e.g. "Hercules Hercules"). */
+  lineName?: string;
+  generation?: string;
+  origin?: string;
+  notes?: string;
+  sourceFile?: string;
+  sourceSheet?: string;
+  importedAt?: string;
   eggs: number;
   l1: number;
   l2: number;
@@ -40,14 +48,24 @@ export type SpeciesInventoryStageKey = keyof Pick<
   'eggs' | 'l1' | 'l2' | 'l3' | 'prePupa' | 'pupa' | 'adult'
 >;
 
-/** Stable id from full species name (one row per species). */
-export function speciesInventoryId(species: string): string {
-  const slug = species
-    .trim()
-    .toLowerCase()
+export function inventoryGroupKey(species: string, lineName?: string, generation?: string): string {
+  return [species.trim(), lineName?.trim(), generation?.trim()]
+    .filter(Boolean)
+    .join('|')
+    .toLowerCase();
+}
+
+/** Stable id for an inventory population group. */
+export function inventoryGroupId(species: string, lineName?: string, generation?: string): string {
+  const slug = inventoryGroupKey(species, lineName, generation)
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   return slug ? `INV-${slug}` : `INV-${Date.now()}`;
+}
+
+/** @deprecated Use inventoryGroupId */
+export function speciesInventoryId(species: string): string {
+  return inventoryGroupId(species);
 }
 
 export const emptySpeciesInventory = (species: string, id = ''): SpeciesInventory => ({
@@ -71,12 +89,25 @@ export function activeLarvaeCount(row: SpeciesInventory): number {
   return row.l1 + row.l2 + row.l3 + row.prePupa;
 }
 
+/** L1–L3 instar counts only (dashboard active larvae). */
+export function instarLarvaeCount(row: SpeciesInventory): number {
+  return row.l1 + row.l2 + row.l3;
+}
+
 export function totalPopulationInventory(rows: SpeciesInventory[]): number {
   return rows.reduce((sum, row) => sum + speciesInventoryTotal(row), 0);
 }
 
 export function totalActiveLarvaeInventory(rows: SpeciesInventory[]): number {
   return rows.reduce((sum, row) => sum + activeLarvaeCount(row), 0);
+}
+
+export function totalInstarLarvaeInventory(rows: SpeciesInventory[]): number {
+  return rows.reduce((sum, row) => sum + instarLarvaeCount(row), 0);
+}
+
+export function totalAdultsInventory(rows: SpeciesInventory[]): number {
+  return rows.reduce((sum, row) => sum + row.adult, 0);
 }
 
 /** Per-beetle growth log entry. */

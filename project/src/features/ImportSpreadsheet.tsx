@@ -156,14 +156,22 @@ export function ImportSpreadsheet({ beetles, growthEntries, onImportConfirmed }:
       existingBeetles: beetles,
       existingGrowthEntries: growthEntries,
       growthSheets: parsedSheet?.growthSheets ?? [],
+      sourceFileName: fileName,
+      sheetNames: parsedSheet?.sheetNames ?? [],
     });
     setGenerated(result);
     setStep('generate');
     setConfirmed(false);
   };
 
+  const canImport =
+    generated &&
+    (generated.speciesInventory.length > 0 ||
+      generated.beetles.length > 0 ||
+      generated.growthEntries.length > 0);
+
   const handleConfirmImport = () => {
-    if (!generated || !confirmed) return;
+    if (!generated || !confirmed || !canImport) return;
     onImportConfirmed({
       beetles: generated.beetles,
       growthEntries: generated.growthEntries,
@@ -227,7 +235,7 @@ export function ImportSpreadsheet({ beetles, growthEntries, onImportConfirmed }:
           <div className="flex flex-wrap gap-2 mb-4">
             <Badge variant="info">{interpretedRows.length} rows</Badge>
             <Badge variant="warning">{stats.needsMapping} need user mapping</Badge>
-            <Badge variant="neutral">{stats.byMeaning['group-header']} group headers</Badge>
+            <Badge variant="neutral">{stats.byMeaning['group-header']} population groups</Badge>
             <Badge variant="neutral">{stats.byMeaning['stage-count']} stage/count rows</Badge>
             <Badge variant="neutral">{stats.byMeaning['individual-beetle']} individual beetles</Badge>
           </div>
@@ -384,11 +392,23 @@ export function ImportSpreadsheet({ beetles, growthEntries, onImportConfirmed }:
             subtitle="Created only from rows you confirmed. Review before final import."
           />
           <div className="flex flex-wrap gap-2 mb-4">
-            <Badge variant="success">{generated.summary.importedBeetles} beetle profiles</Badge>
+            <Badge variant="success">{generated.summary.inventoryGroupsCreated} population groups</Badge>
+            <Badge variant="info">{generated.summary.totalPopulation} total population</Badge>
+            <Badge variant="neutral">{generated.summary.importedBeetles} individual beetles</Badge>
             <Badge variant="neutral">{generated.stageRecords.length} stage rows parsed</Badge>
             <Badge variant="info">{generated.summary.importedGrowthEntries} growth entries</Badge>
-            <Badge variant="info">{generated.summary.importedSpecies} species inventory rows</Badge>
             <Badge variant="neutral">{generated.summary.skippedRows} rows skipped</Badge>
+            {generated.summary.sheetsSkipped.length > 0 && (
+              <Badge variant="warning">
+                {generated.summary.sheetsSkipped.length} sheet(s) skipped:{' '}
+                {generated.summary.sheetsSkipped.join(', ')}
+              </Badge>
+            )}
+            {generated.summary.growthSheetsImported.length > 0 && (
+              <Badge variant="info">
+                Growth tabs: {generated.summary.growthSheetsImported.join(', ')}
+              </Badge>
+            )}
           </div>
 
           {generated.validationWarnings.length > 0 && (
@@ -420,7 +440,7 @@ export function ImportSpreadsheet({ beetles, growthEntries, onImportConfirmed }:
                   {generated.stageRecords.slice(0, 25).map((record) => (
                     <tr key={record.source_row} className="border-b border-gray-800/50">
                       <td className="py-2 px-3 text-gray-500 font-mono">{record.source_row}</td>
-                      <td className="py-2 px-3 text-gray-200">{record.attachedToBeetle || '—'}</td>
+                      <td className="py-2 px-3 text-gray-200">{record.attachedToGroup || '—'}</td>
                       <td className="py-2 px-3 text-gray-400">{record.stage}</td>
                       <td className="py-2 px-3 text-gray-400">{record.count || '—'}</td>
                     </tr>
@@ -430,6 +450,40 @@ export function ImportSpreadsheet({ beetles, growthEntries, onImportConfirmed }:
             </div>
           )}
 
+          {generated.populationGroups.length > 0 && (
+            <div className="space-y-3 mb-4">
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Population groups</p>
+              {generated.populationGroups.map((group, i) => (
+                <div
+                  key={`${group.lineName}-${group.generation}-${i}`}
+                  className="rounded-lg border border-gray-800 bg-gray-900/50 p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-100">Population Group</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Species/Line: {group.lineName || group.species}
+                        {group.generation ? ` · Generation: ${group.generation}` : ''}
+                        {group.origin ? ` · Origin: ${group.origin}` : ''}
+                      </p>
+                    </div>
+                    <Badge variant="success">Total: {group.total}</Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-3 text-xs text-gray-300">
+                    {group.l1 > 0 && <span>L1: {group.l1}</span>}
+                    {group.l2 > 0 && <span>L2: {group.l2}</span>}
+                    {group.l3 > 0 && <span>L3: {group.l3}</span>}
+                    {group.adult > 0 && <span>Adult: {group.adult}</span>}
+                    {group.eggs > 0 && <span>Eggs: {group.eggs}</span>}
+                    {group.pupa > 0 && <span>Pupa: {group.pupa}</span>}
+                    {group.prePupa > 0 && <span>Pre-Pupa: {group.prePupa}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {generated.beetles.length > 0 && (
           <div className="overflow-x-auto border border-gray-800 rounded-lg mb-4">
             <table className="w-full text-xs">
               <thead>
@@ -458,6 +512,7 @@ export function ImportSpreadsheet({ beetles, growthEntries, onImportConfirmed }:
               </tbody>
             </table>
           </div>
+          )}
 
           {generated.speciesInventory.length > 0 && (
             <div className="overflow-x-auto border border-gray-800 rounded-lg mb-4">
@@ -469,18 +524,29 @@ export function ImportSpreadsheet({ beetles, growthEntries, onImportConfirmed }:
                     <th className="text-right py-2 px-3 text-gray-500">L1</th>
                     <th className="text-right py-2 px-3 text-gray-500">L2</th>
                     <th className="text-right py-2 px-3 text-gray-500">L3</th>
+                    <th className="text-right py-2 px-3 text-gray-500">Pre-Pupa</th>
+                    <th className="text-right py-2 px-3 text-gray-500">Pupa</th>
                     <th className="text-right py-2 px-3 text-gray-500">Adult</th>
+                    <th className="text-right py-2 px-3 text-gray-500">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {generated.speciesInventory.map((row) => (
-                    <tr key={row.species} className="border-b border-gray-800/50">
-                      <td className="py-2 px-3 text-gray-200">{row.species}</td>
+                    <tr key={row.id} className="border-b border-gray-800/50">
+                      <td className="py-2 px-3 text-gray-200">
+                        {row.lineName || row.species}
+                        {row.generation ? ` (${row.generation})` : ''}
+                      </td>
                       <td className="py-2 px-3 text-right text-gray-400">{row.eggs || '—'}</td>
                       <td className="py-2 px-3 text-right text-gray-400">{row.l1 || '—'}</td>
                       <td className="py-2 px-3 text-right text-gray-400">{row.l2 || '—'}</td>
                       <td className="py-2 px-3 text-right text-gray-400">{row.l3 || '—'}</td>
+                      <td className="py-2 px-3 text-right text-gray-400">{row.prePupa || '—'}</td>
+                      <td className="py-2 px-3 text-right text-gray-400">{row.pupa || '—'}</td>
                       <td className="py-2 px-3 text-right text-gray-400">{row.adult || '—'}</td>
+                      <td className="py-2 px-3 text-right text-gray-200 font-medium">
+                        {row.eggs + row.l1 + row.l2 + row.l3 + row.prePupa + row.pupa + row.adult}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -506,12 +572,33 @@ export function ImportSpreadsheet({ beetles, growthEntries, onImportConfirmed }:
               type="button"
               variant="primary"
               onClick={handleConfirmImport}
-              disabled={!confirmed || generated.beetles.length === 0}
+              disabled={!confirmed || !canImport}
             >
               <CheckCircle2 className="w-4 h-4" />
               Confirm import
             </Button>
-            {imported && (
+            {imported && generated && (
+              <div className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-1">
+                <p className="text-sm font-medium text-emerald-300 flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4" />
+                  Import complete
+                </p>
+                <ul className="text-xs text-emerald-200/90 space-y-0.5">
+                  <li>{generated.summary.inventoryGroupsCreated} population group(s) created</li>
+                  <li>{generated.summary.totalPopulation} total population imported</li>
+                  <li>{generated.summary.importedBeetles} individual beetle(s) imported</li>
+                  <li>{generated.summary.importedGrowthEntries} growth record(s) imported</li>
+                  <li>{generated.summary.skippedRows} row(s) skipped</li>
+                  {generated.summary.sheetsSkipped.length > 0 && (
+                    <li>Sheets skipped: {generated.summary.sheetsSkipped.join(', ')}</li>
+                  )}
+                  {generated.validationWarnings.length > 0 && (
+                    <li>{generated.validationWarnings.length} warning(s) — review above</li>
+                  )}
+                </ul>
+              </div>
+            )}
+            {imported && !generated && (
               <div className="flex items-center gap-2 text-emerald-400 text-sm">
                 <FileSpreadsheet className="w-4 h-4" />
                 Import complete.

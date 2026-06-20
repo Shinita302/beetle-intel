@@ -1,5 +1,5 @@
 import type { GrowthEntry, GrowthStage, Pairing, SpeciesInventory } from '@/types';
-import { emptySpeciesInventory, speciesInventoryId } from '@/types';
+import { emptySpeciesInventory, inventoryGroupId, inventoryGroupKey } from '@/types';
 import type { DbBeetle } from '@/types/database';
 import { parseLegacyInventoryCounts } from '@/types/database';
 
@@ -44,7 +44,7 @@ export function normalizePairings(raw: unknown[]): Pairing[] {
   return raw.map((item) => normalizePairing(item as Record<string, unknown>));
 }
 
-/** Merge rows by species name and assign stable unique ids. */
+/** Merge rows by inventory group key and assign stable unique ids. */
 export function normalizeSpeciesInventory(rows: SpeciesInventory[]): SpeciesInventory[] {
   const map = new Map<string, SpeciesInventory>();
 
@@ -52,14 +52,14 @@ export function normalizeSpeciesInventory(rows: SpeciesInventory[]): SpeciesInve
     const species = row.species.trim();
     if (!species) continue;
 
-    const key = species.toLowerCase();
-    const current = map.get(key);
+    const groupKey = inventoryGroupKey(species, row.lineName, row.generation);
+    const current = map.get(groupKey);
 
     if (!current) {
-      map.set(key, {
+      map.set(groupKey, {
         ...row,
         species,
-        id: speciesInventoryId(species),
+        id: row.id || inventoryGroupId(species, row.lineName, row.generation),
       });
       continue;
     }
@@ -71,6 +71,9 @@ export function normalizeSpeciesInventory(rows: SpeciesInventory[]): SpeciesInve
     current.prePupa += row.prePupa;
     current.pupa += row.pupa;
     current.adult += row.adult;
+    if (row.notes && !current.notes?.includes(row.notes)) {
+      current.notes = current.notes ? `${current.notes}; ${row.notes}` : row.notes;
+    }
     if (row.updatedAt >= current.updatedAt) {
       current.updatedAt = row.updatedAt;
     }
