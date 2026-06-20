@@ -1,10 +1,11 @@
 import type { ImportRowBlock } from '@/types/hybridImport';
 import type { InterpretedRow } from './importSpreadsheet';
+import { interpretedRowText } from './importSpreadsheet';
 import { looksLikePopulationGroupHeader } from './importPopulationHeaderDetection';
 
 function isBlockStarterRow(row: InterpretedRow): boolean {
   if (row.user_meaning === 'group-header') return true;
-  return looksLikePopulationGroupHeader(row.original_cells, row.raw_text);
+  return looksLikePopulationGroupHeader(row.original_cells, interpretedRowText(row));
 }
 
 function rowHasStageData(row: InterpretedRow): boolean {
@@ -80,7 +81,7 @@ export function detectInventoryBlocks(interpreted: InterpretedRow[]): ImportRowB
     if (meaning === 'uncertain') {
       if (current) {
         current.noteRows.push(
-          row.original_cells.filter(Boolean).join(' | ') || row.detection_notes || row.raw_text
+          row.original_cells.filter(Boolean).join(' | ') || row.detection_notes || interpretedRowText(row)
         );
       }
       continue;

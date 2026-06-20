@@ -21,6 +21,7 @@ import {
 import {
   generateRecordsFromConfirmed,
   interpretRawRows,
+  interpretedRowText,
   type ParsedSpreadsheet,
   type PopulationGroupPreview,
 } from './importSpreadsheet';
@@ -182,7 +183,7 @@ function buildDetectedHeaderAudit(
   const auditedRows = new Set(groupAudit.map((entry) => `${entry.sourceSheet ?? ''}:${entry.sourceRow}`));
 
   for (const row of interpreted) {
-    if (!looksLikePopulationGroupHeader(row.original_cells, row.raw_text)) continue;
+    if (!looksLikePopulationGroupHeader(row.original_cells, interpretedRowText(row))) continue;
 
     const rowKey = `${row.source_sheet ?? ''}:${row.source_row}`;
     if (auditedRows.has(rowKey)) continue;

@@ -140,6 +140,10 @@ export interface InterpretedRow {
   detection_notes: string;
 }
 
+export function interpretedRowText(row: Pick<InterpretedRow, 'original_cells'>): string {
+  return row.original_cells.filter(Boolean).join(' | ').trim();
+}
+
 export interface StructuredImportBuild {
   beetles: Beetle[];
   growthEntries: GrowthEntry[];
@@ -1148,10 +1152,10 @@ function promotePopulationHeaderRows(interpreted: InterpretedRow[]): void {
     if (row.user_meaning === 'group-header' || row.user_meaning === 'empty' || row.user_meaning === 'note') {
       continue;
     }
-    if (!looksLikePopulationGroupHeader(row.original_cells, row.raw_text)) continue;
+    if (!looksLikePopulationGroupHeader(row.original_cells, interpretedRowText(row))) continue;
 
     const cells = row.original_cells;
-    const fullText = row.raw_text;
+    const fullText = interpretedRowText(row);
     const headerFields = parsePopulationHeaderFields(cells, fullText);
 
     row.user_meaning = 'group-header';
