@@ -15,25 +15,8 @@ import {
   parseStageCombinedCell,
   parseStageRowMetrics,
   parseGenerationFromStageLabel,
-  parseStageLabelToLifecycle,
   PLAIN_NUMBERS_AS_COUNTS_WARNING,
 } from './spreadsheetMetrics';
-import type { LifecycleStage } from '../types/lifecycle';
-
-interface DraftStageNotes {
-  egg: string;
-  l1: string;
-  l2: string;
-  l3: string;
-  pupa: string;
-  adult: string;
-}
-
-interface DraftInstarWeights {
-  l1: number;
-  l2: number;
-  l3: number;
-}
 
 interface DraftInventoryCounts {
   eggs: number;
@@ -45,17 +28,6 @@ interface DraftInventoryCounts {
   adult: number;
 }
 
-const emptyStageNotes = (): DraftStageNotes => ({
-  egg: '',
-  l1: '',
-  l2: '',
-  l3: '',
-  pupa: '',
-  adult: '',
-});
-
-const emptyInstarWeights = (): DraftInstarWeights => ({ l1: 0, l2: 0, l3: 0 });
-
 const emptyInventoryCounts = (): DraftInventoryCounts => ({
   eggs: 0,
   l1: 0,
@@ -65,13 +37,6 @@ const emptyInventoryCounts = (): DraftInventoryCounts => ({
   pupa: 0,
   adult: 0,
 });
-
-function combineStageNotes(notes: DraftStageNotes): string {
-  return Object.values(notes)
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .join(' · ');
-}
 
 function mergeDraftInventory(
   map: Map<string, SpeciesInventory>,
@@ -102,37 +67,6 @@ function mergeDraftInventory(
   row.adult += counts.adult;
   row.updatedAt = new Date().toISOString().slice(0, 10);
   map.set(mapKey, row);
-}
-
-function instarToGrowthStage(instar: keyof DraftInstarWeights): GrowthStage {
-  if (instar === 'l1') return 'L1';
-  if (instar === 'l2') return 'L2';
-  return 'L3';
-}
-
-function pushDraftGrowthEntries(
-  entries: GrowthEntry[],
-  beetleId: string,
-  weights: DraftInstarWeights,
-  notes: DraftStageNotes,
-  date: string
-) {
-  (['l1', 'l2', 'l3'] as const).forEach((instar) => {
-    const weight = weights[instar];
-    if (weight <= 0) return;
-    entries.push({
-      id: `GE-${String(entries.length + 1).padStart(3, '0')}`,
-      beetleId,
-      date,
-      stage: instarToGrowthStage(instar),
-      weight,
-      temperature: 0,
-      humidity: 0,
-      substrate: '',
-      notes: notes[instar] ?? '',
-      createdAt: date,
-    });
-  });
 }
 
 export type SpreadsheetStyle = 'header-table' | 'block-notes' | 'mixed';
@@ -401,18 +335,6 @@ export function isDevelopmentalStageLabel(text: string): boolean {
 
 function isNumericOrMeasurement(value: string): boolean {
   return isPureNumber(value) || /^\d+(\.\d+)?\s*(g|mm|ml|cc|l|pcs?|pc)?$/i.test(value.trim());
-}
-
-function stageDetectionToLifecycle(stage: StageDetection): LifecycleStage | null {
-  const fromLabel = parseStageLabelToLifecycle(stage.label);
-  if (fromLabel) return fromLabel;
-  if (stage.instar === 'L1') return 'L1';
-  if (stage.instar === 'L2') return 'L2';
-  if (stage.instar === 'L3') return 'L3';
-  if (stage.label === 'Egg') return 'egg';
-  if (stage.label === 'Pupa' || stage.label === 'Pre-Pupa') return 'pupa';
-  if (stage.beetleStatus === 'adult' || stage.label === 'Adult') return 'adult';
-  return null;
 }
 
 function inventoryKeyFromStage(stage: StageDetection): keyof DraftInventoryCounts | null {
@@ -1269,92 +1191,6 @@ function parsePopulationHeaderFields(cells: string[], fullText: string): {
   };
 }
 
-function parseGroupHeaderFields(cells: string[], fullText: string): {
-  beetleName: string;
-  species: string;
-  profileStatus: BeetleStatus;
-} {
-  const textCells = extractNonNumericText(cells);
-  const nonStageCells = textCells.filter((cell) => !isDevelopmentalStageLabel(cell));
-  const stageCells = textCells.filter((cell) => isDevelopmentalStageLabel(cell));
-
-  let beetleName = '';
-  let profileStatus: BeetleStatus = 'larva';
-
-  if (nonStageCells[0]) {
-    const parsed = splitNameAndStageMarker(nonStageCells[0]);
-    beetleName = parsed.name || nonStageCells[0];
-    if (parsed.stage?.beetleStatus) profileStatus = parsed.stage.beetleStatus as BeetleStatus;
-  } else if (textCells[0]) {
-    const parsed = splitNameAndStageMarker(textCells[0]);
-    beetleName = parsed.name;
-    if (parsed.stage?.beetleStatus) profileStatus = parsed.stage.beetleStatus as BeetleStatus;
-  }
-
-  if (stageCells[0]) {
-    const stage = detectDevelopmentalStage(stageCells[0]);
-    if (stage?.beetleStatus) profileStatus = stage.beetleStatus as BeetleStatus;
-  }
-
-  if (!beetleName && textCells[0]) {
-    const parsed = splitNameAndStageMarker(textCells[0]);
-    if (parsed.name) beetleName = parsed.name;
-  }
-
-  const species =
-    inferSpeciesFromText(beetleName) ||
-    inferSpeciesFromText(fullText) ||
-    (beetleName && !isDevelopmentalStageLabel(beetleName) ? beetleName : '');
-
-  return {
-    beetleName: sanitizeBeetleNameCandidate(beetleName),
-    species: species.trim(),
-    profileStatus,
-  };
-}
-
-function stageNoteKeyFromDetection(stage: StageDetection): keyof DraftStageNotes | null {
-  if (stage.instar === 'L1') return 'l1';
-  if (stage.instar === 'L2') return 'l2';
-  if (stage.instar === 'L3') return 'l3';
-  if (stage.beetleStatus === 'adult' || stage.label === 'Adult' || /^adult/i.test(stage.label)) return 'adult';
-  if (stage.label === 'Pupa') return 'pupa';
-  if (stage.label === 'Pre-Pupa') return 'pupa';
-  if (stage.label === 'Egg') return 'egg';
-  if (stage.label === 'Larva') return 'l1';
-  return null;
-}
-
-/** Count / extra text only — gram weight is stored on instarWeights. */
-function buildInstarNoteContent(fields: RowFieldDraft): string {
-  const parts: string[] = [];
-  if (fields.count) parts.push(`Count: ${fields.count}`);
-  if (fields.size) parts.push(`Size: ${fields.size} mm`);
-  const extra = fields.notes?.trim();
-  if (extra && !isDevelopmentalStageLabel(extra) && extra !== fields.stage_status) {
-    parts.push(extra);
-  }
-  return parts.join(', ');
-}
-
-function buildAdultStageNoteContent(fields: RowFieldDraft): string {
-  const parts: string[] = [];
-  if (fields.count) parts.push(`Count: ${fields.count}`);
-  if (fields.weight) parts.push(`Weight: ${fields.weight} g`);
-  if (fields.size) parts.push(`Size: ${fields.size} mm`);
-  const extra = fields.notes?.trim();
-  if (extra && !isDevelopmentalStageLabel(extra) && extra !== fields.stage_status) {
-    parts.push(extra);
-  }
-  return parts.join(', ');
-}
-
-function appendStageNote(existing: string, addition: string): string {
-  if (!addition) return existing;
-  if (!existing) return addition;
-  return `${existing}; ${addition}`;
-}
-
 interface InventoryGroupDraft {
   sourceRow: number;
   sourceSheet?: string;
@@ -1401,33 +1237,6 @@ function createInventoryGroupDraft(row: InterpretedRow, cells: string[]): Invent
   }
 
   return draft;
-}
-
-function finalizeInventoryGroup(
-  draft: InventoryGroupDraft,
-  sourceFile: string,
-  now: string
-): SpeciesInventory {
-  const row = emptySpeciesInventory(
-    draft.species,
-    inventoryGroupId(draft.species, draft.lineName, draft.generation)
-  );
-  row.lineName = draft.lineName;
-  row.generation = draft.generation;
-  row.origin = draft.origin;
-  row.notes = draft.notes;
-  row.sourceFile = sourceFile;
-  row.sourceSheet = draft.sourceSheet;
-  row.importedAt = now;
-  row.eggs = draft.inventoryCounts.eggs;
-  row.l1 = draft.inventoryCounts.l1;
-  row.l2 = draft.inventoryCounts.l2;
-  row.l3 = draft.inventoryCounts.l3;
-  row.prePupa = draft.inventoryCounts.prePupa;
-  row.pupa = draft.inventoryCounts.pupa;
-  row.adult = draft.inventoryCounts.adult;
-  row.updatedAt = now.slice(0, 10);
-  return row;
 }
 
 function inventoryGroupPreviewFromDraft(draft: InventoryGroupDraft): PopulationGroupPreview {
