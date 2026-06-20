@@ -13,19 +13,30 @@ export const GIRAFFE_WITH_OBSERVATION = [
 
 export const HERCULES_F4_BLOCK = [
   ['Hercules Hercules', 'headcount', 'adult(F4)', 'Unknown Origin', 'CB'],
+  ['28th December 2025: Male'],
   ['L1', '106'],
   ['L2', '87'],
   ['L3', '34'],
   ['adult(F4)', '24'],
 ];
 
+/** Full breeder block with sex metadata columns on stage rows. */
 export const LAMPRIMA_BLOCK = [
+  ['lamprima adolphinae', 'headcount', 'adult(F4+)', 'CB', 'Eggs:17'],
+  ['L1', '0', '6', '3 males'],
+  ['L2', '0', '', '3 females'],
+  ['L3', '16'],
+];
+
+export const LAMPRIMA_SIMPLE_BLOCK = [
   ['lamprima adolphinae', 'headcount', 'adult', 'CB'],
+  ['3 males'],
+  ['3 females'],
   ['16'],
 ];
 
 export const CALCOSOMA_CB_BLOCK = [
-  ['Calcosoma.M', 'CB'],
+  ['Calcosoma.M', 'headcount', 'adult', 'CB'],
   ['L1', '20'],
   ['adult', '5'],
 ];
@@ -36,7 +47,7 @@ export const HPERRyi_ADULT_ONLY_BLOCK = [
 ];
 
 export const MUSIMON_EGG_PUPA_BLOCK = [
-  ['Musimon', 'headcount', 'CB'],
+  ['Musimon', 'headcount', 'adult', 'CB'],
   ['eggs', '12'],
   ['pupa', '4'],
 ];

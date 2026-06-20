@@ -2,7 +2,7 @@ import type { EditableImportGroup } from '@/types/hybridImport';
 import {
   inventoryCountTotal,
   isObservationNoteText,
-  isValidLineName,
+  isValidSpeciesFromHeader,
   parseStrictGeneration,
   parseStrictOrigin,
 } from './importFieldParsing';
@@ -21,7 +21,7 @@ export function validateImportGroup(group: EditableImportGroup): string[] {
 
   if (!line) {
     warnings.push('Missing species/line name');
-  } else if (!isValidLineName(line)) {
+  } else if (!isValidSpeciesFromHeader(line)) {
     warnings.push(`Species/line "${line}" looks invalid`);
   }
 

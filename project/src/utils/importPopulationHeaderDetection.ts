@@ -1,5 +1,6 @@
 import {
   isObservationNoteText,
+  isSexCountLabel,
   isValidLineName,
   parseStrictOrigin,
 } from './importFieldParsing';
@@ -81,8 +82,6 @@ function isGroupAnchorRow(cells: string[]): boolean {
     if (parsed.name && parsed.stage) return true;
   }
 
-  if (speciesName && !hasStageMarker && textCells.length <= 4) return true;
-
   return false;
 }
 
@@ -124,9 +123,12 @@ function isHorizontalInventoryRow(cells: string[]): boolean {
  */
 export function looksLikePopulationGroupHeader(cells: string[], fullText: string): boolean {
   if (isObservationNoteText(fullText)) return false;
+  if (isSexCountLabel(fullText.trim())) return false;
 
   const textCells = cells.map((c) => c.trim()).filter(Boolean);
   if (textCells.length === 0) return false;
+
+  if (textCells.length === 1 && isSexCountLabel(textCells[0])) return false;
 
   if (isHorizontalInventoryRow(cells)) return true;
 

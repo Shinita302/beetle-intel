@@ -21,6 +21,7 @@ import {
   INVENTORY_COUNT_LABELS,
   inventoryCountTotal,
   isObservationNoteText,
+  isSexCountLabel,
   isValidLineName,
   parseGenerationFromCells,
   parseOriginFromCells,
@@ -1125,6 +1126,7 @@ function promotePopulationHeaderRows(interpreted: InterpretedRow[]): void {
       continue;
     }
     if (!looksLikePopulationGroupHeader(row.original_cells, interpretedRowText(row))) continue;
+    if (isSexCountLabel(interpretedRowText(row))) continue;
 
     const cells = row.original_cells;
     const fullText = interpretedRowText(row);

@@ -1,11 +1,18 @@
 import type { ImportRowBlock } from '@/types/hybridImport';
+import { isSexCountLabel, isValidLineName } from './importFieldParsing';
+import { inferSpeciesFromHeaderCells } from './importPopulationHeaderDetection';
 import type { InterpretedRow } from './importSpreadsheet';
 import { interpretedRowText } from './importSpreadsheet';
 import { looksLikePopulationGroupHeader } from './importPopulationHeaderDetection';
 
 function isBlockStarterRow(row: InterpretedRow): boolean {
+  if (row.user_meaning === 'note' || row.user_meaning === 'empty') return false;
+
+  const text = interpretedRowText(row);
+  if (isSexCountLabel(text)) return false;
+
   if (row.user_meaning === 'group-header') return true;
-  return looksLikePopulationGroupHeader(row.original_cells, interpretedRowText(row));
+  return looksLikePopulationGroupHeader(row.original_cells, text);
 }
 
 function rowHasStageData(row: InterpretedRow): boolean {
@@ -89,7 +96,51 @@ export function detectInventoryBlocks(interpreted: InterpretedRow[]): ImportRowB
   }
 
   flush();
-  return blocks;
+  return coalesceHeaderOnlyBlocks(interpreted, blocks);
+}
+
+/** Merge header-only blocks with following stage/note rows that lost their parent due to mis-split. */
+function coalesceHeaderOnlyBlocks(interpreted: InterpretedRow[], blocks: ImportRowBlock[]): ImportRowBlock[] {
+  if (blocks.length <= 1) return blocks;
+
+  const merged: ImportRowBlock[] = [];
+
+  for (let i = 0; i < blocks.length; i++) {
+    let block = blocks[i];
+
+    while (i + 1 < blocks.length) {
+      const rows = rowsForBlock(interpreted, block);
+      const headerRow = rows.find((row) => row.user_meaning === 'group-header');
+      const species = headerRow ? inferSpeciesFromHeaderCells(headerRow.original_cells) : '';
+      const hasStageCounts = rows.some(
+        (row) => row.user_meaning === 'stage-count' && Boolean(row.user_fields.count)
+      );
+
+      if (!headerRow || !species || !isValidLineName(species) || hasStageCounts) break;
+
+      const next = blocks[i + 1];
+      const nextRows = rowsForBlock(interpreted, next);
+      const nextRealHeader = nextRows.find(
+        (row) =>
+          row.user_meaning === 'group-header' &&
+          isValidLineName(inferSpeciesFromHeaderCells(row.original_cells))
+      );
+
+      if (nextRealHeader) break;
+
+      block = {
+        ...block,
+        rowIndices: [...block.rowIndices, ...next.rowIndices],
+        endRow: next.endRow,
+        noteRows: [...block.noteRows, ...next.noteRows],
+      };
+      i += 1;
+    }
+
+    merged.push(block);
+  }
+
+  return merged;
 }
 
 export function rowsForBlock(interpreted: InterpretedRow[], block: ImportRowBlock): InterpretedRow[] {
