@@ -810,10 +810,6 @@ function isHeadcountCategory(value: string): boolean {
   return /headcount|population|inventory/i.test(value.trim());
 }
 
-function isOriginLabel(value: string): boolean {
-  return Boolean(parseStrictOrigin(value));
-}
-
 /** Breeder inventory header: species/line + headcount or adult(F4) generation row */
 function isPopulationGroupHeader(cells: string[], fullText: string): boolean {
   if (isObservationNoteText(fullText)) return false;
