@@ -856,34 +856,6 @@ function extractLeadingNameColumn(cells: string[]): string {
   return '';
 }
 
-/** Beetle profile anchor: species/name + optional adult/pupa marker; may include counts */
-function isGroupAnchorRow(cells: string[], fullText: string): boolean {
-  const textCells = extractNonNumericText(cells);
-  const nonStageCells = textCells.filter((cell) => !isDevelopmentalStageLabel(cell));
-
-  const hasInstarStage = textCells.some((cell) => {
-    const detected = detectDevelopmentalStage(cell);
-    return Boolean(detected?.instar || /^l[123]$/i.test(cell.trim()));
-  });
-  if (hasInstarStage) return false;
-
-  const leadingName = extractLeadingNameColumn(cells);
-  const speciesName =
-    nonStageCells.find((cell) => cell.trim().length > 1) || leadingName || inferSpeciesFromText(fullText);
-  const hasStageMarker = textCells.some((cell) => isDevelopmentalStageLabel(cell));
-
-  if (speciesName && hasStageMarker) return true;
-
-  if (nonStageCells.length === 1) {
-    const parsed = splitNameAndStageMarker(nonStageCells[0]);
-    if (parsed.name && parsed.stage) return true;
-  }
-
-  if (speciesName && !hasStageMarker && textCells.length <= 2) return true;
-
-  return false;
-}
-
 /** Developmental stage rows with optional numbers — never group headers */
 function isStageCountRow(cells: string[]): boolean {
   const fullText = cells.filter((cell) => cell.trim()).join(' | ');
