@@ -59,7 +59,7 @@ function hasInventoryMetaCell(textCells: string[]): boolean {
 }
 
 /** Species/line anchor without stage instar rows (L1/L2/L3 data rows). */
-function isGroupAnchorRow(cells: string[], fullText: string): boolean {
+function isGroupAnchorRow(cells: string[]): boolean {
   const textCells = extractNonNumericText(cells);
   const nonStageCells = textCells.filter((cell) => !isDevelopmentalStageLabel(cell));
 
@@ -136,7 +136,7 @@ export function looksLikePopulationGroupHeader(cells: string[], fullText: string
       textCells.some((c) => isValidLineName(c) && !isMetaInventoryCell(c)) &&
       textCells.some((c) => isAdultLabel(c) || /^adults?$/i.test(c) || parseStageLabelToLifecycle(c));
     if (!hasHeadcountStructure) {
-      return isGroupAnchorRow(cells, fullText);
+      return isGroupAnchorRow(cells);
     }
   }
 
