@@ -23,12 +23,19 @@ import {
 import { StatCard } from '../components/ui/StatCard';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import type { Beetle, GrowthEntry, Pairing, PestRisk } from '../types';
-import { beetleLabel, pairingFertilityScore } from '../types';
+import type { Beetle, GrowthEntry, Pairing, PestRisk, SpeciesInventory } from '../types';
+import {
+  beetleLabel,
+  pairingFertilityScore,
+  totalActiveLarvaeInventory,
+  totalPopulationInventory,
+} from '../types';
+import { beetleCountTrend, larvalActivityTrend } from '../utils/dashboardMetrics';
 
 interface DashboardProps {
   beetles: Beetle[];
   growthEntries: GrowthEntry[];
+  speciesInventory: SpeciesInventory[];
   pairings: Pairing[];
   pestRisks: PestRisk[];
   onNavigate: (page: string) => void;
@@ -48,8 +55,9 @@ function calcFertilityScore(pairings: Pairing[]): number {
 }
 
 function getLarvalGrowthChart(beetles: Beetle[], growthEntries: GrowthEntry[]) {
+  const idsWithGrowth = new Set(growthEntries.map((entry) => entry.beetleId));
   const top3 = beetles
-    .filter((b) => b.status === 'larva' || b.status === 'pupa')
+    .filter((b) => idsWithGrowth.has(b.id) || b.status === 'larva' || b.status === 'pupa')
     .slice(0, 3);
 
   if (top3.length === 0) {
@@ -99,17 +107,37 @@ const problemTypeLabel: Record<string, string> = {
   unknown: 'Unknown',
 };
 
-export function Dashboard({ beetles, growthEntries, pairings, pestRisks, onNavigate }: DashboardProps) {
-  const activeLarvae = beetles.filter((b) => b.status === 'larva').length;
+export function Dashboard({
+  beetles,
+  growthEntries,
+  speciesInventory,
+  pairings,
+  pestRisks,
+  onNavigate,
+}: DashboardProps) {
+  const hasInventory = speciesInventory.length > 0;
+  const totalPopulation = hasInventory
+    ? totalPopulationInventory(speciesInventory)
+    : beetles.length;
+  const activeLarvae = hasInventory
+    ? totalActiveLarvaeInventory(speciesInventory)
+    : beetles.filter((b) => b.status === 'larva').length;
   const avgHatchRate = calcHatchRate(pairings);
   const avgFertility = calcFertilityScore(pairings);
   const growthData = getLarvalGrowthChart(beetles, growthEntries);
   const fertilityData = getFertilityRanking(beetles, pairings);
+  const totalBeetlesTrend = hasInventory ? null : beetleCountTrend(beetles);
+  const activeLarvaeTrend = larvalActivityTrend(beetles, growthEntries);
   const openPestRisks = pestRisks.filter((pr) => pr.status === 'open');
   const recentPairings = [...pairings].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
 
   const topBeetleNames = beetles
-    .filter((b) => b.status === 'larva' || b.status === 'pupa')
+    .filter(
+      (b) =>
+        growthEntries.some((entry) => entry.beetleId === b.id) ||
+        b.status === 'larva' ||
+        b.status === 'pupa'
+    )
     .slice(0, 3)
     .map((b) => b.name);
 
@@ -152,19 +180,19 @@ export function Dashboard({ beetles, growthEntries, pairings, pestRisks, onNavig
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Total Beetles"
-          value={beetles.length}
+          label={hasInventory ? 'Total Population' : 'Total Beetles'}
+          value={totalPopulation}
           icon={Bug}
           color="bg-sky-500/15 text-sky-400"
-          trend={{ value: 12, label: 'this month' }}
-          onClick={() => onNavigate('add-beetle')}
+          trend={totalBeetlesTrend}
+          onClick={() => onNavigate(hasInventory ? 'inventory' : 'add-beetle')}
         />
         <StatCard
           label="Active Larvae"
           value={activeLarvae}
           icon={Sprout}
           color="bg-emerald-500/15 text-emerald-400"
-          trend={{ value: 8, label: 'growth' }}
+          trend={activeLarvaeTrend}
           onClick={() => onNavigate('larval-growth')}
         />
         <StatCard

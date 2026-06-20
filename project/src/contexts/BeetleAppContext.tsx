@@ -222,7 +222,7 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
       setSpeciesInventory([]);
       setPairings([]);
       setPestRisks([]);
-      clearAllAppDataFromStorage();
+      clearAllAppDataFromStorage(userId);
     });
   }, [run, userId, setGrowthEntries, setSpeciesInventory, setPairings, setPestRisks]);
 

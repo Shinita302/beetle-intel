@@ -134,6 +134,7 @@ export type RowMeaning =
 
 export interface RawSheetRow {
   source_row: number;
+  source_sheet?: string;
   cells: string[];
   raw_text: string;
 }
@@ -144,6 +145,9 @@ export interface ParsedSpreadsheet {
   style: SpreadsheetStyle;
   /** All rows including empty ones, for exact original display */
   allRows: RawSheetRow[];
+  /** Worksheets detected as larval growth time-series (e.g. DHH tab) */
+  growthSheets: { name: string; rows: RawSheetRow[] }[];
+  sheetNames: string[];
 }
 
 export interface RowFieldDraft {
@@ -531,9 +535,189 @@ function matrixToRows(matrix: string[][]): RawSheetRow[] {
   });
 }
 
+const SHEET_SPECIES_ALIASES: Record<string, string> = {
+  dhh: 'Dynastes Hercules Hercules',
+};
+
+/** Map worksheet tab names to species (e.g. "DHH" → Dynastes Hercules Hercules). */
+export function inferSpeciesFromSheetName(sheetName: string): string {
+  const trimmed = sheetName.trim();
+  const key = trimmed.toLowerCase();
+  if (SHEET_SPECIES_ALIASES[key]) return SHEET_SPECIES_ALIASES[key];
+  if (/^dhh$/i.test(trimmed)) return 'Dynastes Hercules Hercules';
+  if (/dynastes/i.test(trimmed) && /hercules/i.test(trimmed)) return trimmed;
+  if (SPECIES_HINTS.some((hint) => key.includes(hint)) && trimmed.length > 2) {
+    return trimmed;
+  }
+  return '';
+}
+
+interface GrowthSheetColumnMap {
+  date?: number;
+  weight?: number;
+  stage?: number;
+  notes?: number;
+  species?: number;
+}
+
+function findGrowthHeaderRow(rows: RawSheetRow[]): RawSheetRow | null {
+  for (const row of rows) {
+    if (isEmptyRow(row.cells)) continue;
+    if (detectGrowthSheetColumns(row.cells)) return row;
+  }
+  return null;
+}
+
+function detectGrowthSheetColumns(headerCells: string[]): GrowthSheetColumnMap | null {
+  const map: GrowthSheetColumnMap = {};
+  headerCells.forEach((cell, index) => {
+    const h = normalize(cell);
+    if (!h) return;
+    if (/^date|checked|measured|when/.test(h)) map.date = index;
+    if (/weight|mass|\(g\)|grams?/.test(h)) map.weight = index;
+    if (/^stage|instar|larva/.test(h) || /^l[123]$/.test(h)) map.stage = index;
+    if (/note|comment|substrate|remark/.test(h)) map.notes = index;
+    if (/species|beetle.?name|^name$/.test(h)) map.species = index;
+  });
+
+  if (map.weight === undefined) return null;
+  if (map.date !== undefined || map.stage !== undefined) return map;
+  return null;
+}
+
+/** True when a worksheet looks like a dated weight log (not inventory counts). */
+export function isGrowthTrackingSheet(sheetName: string, rows: RawSheetRow[]): boolean {
+  const nonEmpty = rows.filter((row) => !isEmptyRow(row.cells));
+  if (nonEmpty.length === 0) return false;
+
+  const name = sheetName.trim().toLowerCase();
+  if (/inventory|stock|count|population|summary|readme|notes?$/i.test(name)) return false;
+
+  const hasGrowthColumns = Boolean(findGrowthHeaderRow(nonEmpty));
+  if (/growth|larval.?track|weight.?log|track.?log|measurement/i.test(name) && hasGrowthColumns) {
+    return true;
+  }
+  if (/^dhh$|hercules.?growth|larval.?growth/i.test(name) && hasGrowthColumns) {
+    return true;
+  }
+
+  return hasGrowthColumns;
+}
+
+function growthStageFromCell(raw: string): GrowthStage {
+  const detected = detectDevelopmentalStage(raw);
+  if (detected?.instar) return detected.instar;
+  if (detected?.label === 'Pupa') return 'Pupa';
+  if (detected?.label === 'Egg') return 'Egg';
+  if (/\bl1\b/i.test(raw)) return 'L1';
+  if (/\bl2\b/i.test(raw)) return 'L2';
+  if (/\bl3\b/i.test(raw)) return 'L3';
+  return 'L1';
+}
+
+function resolveBeetleForGrowthImport(
+  species: string,
+  pendingBeetles: Beetle[],
+  existingBeetles: Beetle[],
+  now: string
+): { beetle: Beetle; created: boolean } {
+  const key = species.trim().toLowerCase();
+  const pool = [...existingBeetles, ...pendingBeetles];
+
+  const match = pool.find((b) => {
+    const sp = b.species.toLowerCase();
+    const nm = b.name.toLowerCase();
+    return sp === key || sp.includes(key) || key.includes(sp) || nm === key;
+  });
+
+  if (match) return { beetle: match, created: false };
+
+  const beetle: Beetle = {
+    id: nextBeetleId(existingBeetles.length, pendingBeetles.length),
+    name: species.split(/\s+/).slice(-1)[0] || species,
+    species,
+    sex: 'unknown',
+    status: 'larva',
+    generation: '',
+    notes: 'Auto-created from growth worksheet import',
+    source: 'growth-sheet-import',
+    bloodline: '',
+    createdAt: now,
+  };
+  pendingBeetles.push(beetle);
+  return { beetle, created: true };
+}
+
+/** Import dated weight rows from growth worksheets (multi-tab workbooks). */
+export function importGrowthEntriesFromSheets(
+  sheets: { name: string; rows: RawSheetRow[] }[],
+  existingBeetles: Beetle[],
+  existingGrowthEntries: GrowthEntry[]
+): { growthEntries: GrowthEntry[]; newBeetles: Beetle[] } {
+  const growthEntries: GrowthEntry[] = [];
+  const newBeetles: Beetle[] = [];
+  const now = new Date().toISOString().slice(0, 10);
+  let entryIndex = existingGrowthEntries.length;
+
+  for (const sheet of sheets) {
+    const nonEmpty = sheet.rows.filter((row) => !isEmptyRow(row.cells));
+    const headerRow = findGrowthHeaderRow(nonEmpty);
+    if (!headerRow) continue;
+
+    const columns = detectGrowthSheetColumns(headerRow.cells);
+    if (!columns || columns.weight === undefined) continue;
+
+    const defaultSpecies =
+      inferSpeciesFromSheetName(sheet.name) ||
+      inferSpeciesFromText(sheet.name) ||
+      sheet.name.trim();
+
+    const dataRows = nonEmpty.filter((row) => row.source_row > headerRow.source_row);
+
+    for (const row of dataRows) {
+      const cells = row.cells;
+      const weightRaw = columns.weight !== undefined ? cells[columns.weight] ?? '' : '';
+      let weight = parseNumeric(weightRaw);
+      if (weight <= 0 && weightRaw) {
+        const gramMatch = weightRaw.match(/(\d+(?:\.\d+)?)\s*(?:g|gram)/i);
+        if (gramMatch) weight = parseFloat(gramMatch[1]);
+      }
+      if (weight <= 0) continue;
+
+      const dateRaw = columns.date !== undefined ? cells[columns.date] ?? '' : '';
+      const date = dateRaw ? parseDateLoose(dateRaw) : now;
+      const stageRaw = columns.stage !== undefined ? cells[columns.stage] ?? '' : '';
+      const speciesRaw =
+        columns.species !== undefined ? cells[columns.species] ?? '' : defaultSpecies;
+      const species = speciesRaw.trim() || defaultSpecies;
+      const notes = columns.notes !== undefined ? cells[columns.notes]?.trim() ?? '' : '';
+
+      const { beetle } = resolveBeetleForGrowthImport(species, newBeetles, existingBeetles, now);
+
+      entryIndex += 1;
+      growthEntries.push({
+        id: `GE-${String(entryIndex).padStart(3, '0')}`,
+        beetleId: beetle.id,
+        date,
+        stage: stageRaw ? growthStageFromCell(stageRaw) : 'L1',
+        weight: weight,
+        temperature: 0,
+        humidity: 0,
+        substrate: '',
+        notes: notes || `Imported from sheet "${sheet.name}"`,
+        createdAt: date,
+      });
+    }
+  }
+
+  return { growthEntries, newBeetles };
+}
+
 export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
   const lower = file.name.toLowerCase();
-  let matrix: string[][] = [];
+  let allRows: RawSheetRow[] = [];
+  const growthSheets: { name: string; rows: RawSheetRow[] }[] = [];
+  const sheetNames: string[] = [];
 
   if (lower.endsWith('.csv')) {
     const text = await file.text();
@@ -541,28 +725,48 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
       skipEmptyLines: false,
       dynamicTyping: false,
     });
-    matrix = (parsed.data as string[][]).map((row) => row.map((cell) => String(cell ?? '')));
+    const matrix = (parsed.data as string[][]).map((row) => row.map((cell) => String(cell ?? '')));
+    allRows = matrixToRows(matrix);
+    sheetNames.push('Sheet1');
   } else if (lower.endsWith('.xlsx')) {
     const xlsx = await import('xlsx');
     const buffer = await file.arrayBuffer();
     const workbook = xlsx.read(buffer, { type: 'array' });
-    const firstSheet = workbook.SheetNames[0];
-    if (!firstSheet) throw new Error('Spreadsheet has no sheets.');
-    matrix = xlsx.utils.sheet_to_json<string[]>(workbook.Sheets[firstSheet], {
-      header: 1,
-      raw: false,
-      blankrows: true,
-      defval: '',
-    });
+    let globalRow = 0;
+
+    for (const sheetName of workbook.SheetNames) {
+      sheetNames.push(sheetName);
+      const matrix = xlsx.utils.sheet_to_json<string[]>(workbook.Sheets[sheetName], {
+        header: 1,
+        raw: false,
+        blankrows: true,
+        defval: '',
+      });
+      const sheetRows = matrixToRows(matrix).map((row) => ({
+        ...row,
+        source_sheet: sheetName,
+        source_row: ++globalRow,
+      }));
+
+      const nonEmpty = sheetRows.filter((row) => !isEmptyRow(row.cells));
+      if (isGrowthTrackingSheet(sheetName, nonEmpty)) {
+        growthSheets.push({ name: sheetName, rows: sheetRows });
+      } else {
+        allRows.push(...sheetRows);
+      }
+    }
+
+    if (allRows.length === 0 && growthSheets.length > 0) {
+      throw new Error('Workbook contains only growth worksheets — add an inventory sheet or combine data.');
+    }
   } else {
     throw new Error('Unsupported file type. Upload CSV or XLSX.');
   }
 
-  const allRows = matrixToRows(matrix);
   const nonEmptyRows = allRows.filter((row) => !isEmptyRow(row.cells));
   const style = detectSpreadsheetStyle(nonEmptyRows);
   const headers = nonEmptyRows[0]?.cells ?? [];
-  return { headers, rows: nonEmptyRows, style, allRows };
+  return { headers, rows: nonEmptyRows, style, allRows, growthSheets, sheetNames };
 }
 
 export function detectSpreadsheetStyle(rows: RawSheetRow[]): SpreadsheetStyle {
@@ -855,9 +1059,16 @@ function interpretSingleRow(row: RawSheetRow, activeGroup: string): InterpretedR
 /** Step 1: interpret raw rows without creating beetle profiles */
 export function interpretRawRows(parsed: ParsedSpreadsheet): InterpretedRow[] {
   let currentGroup = '';
+  let currentSheet = '';
   const interpreted: InterpretedRow[] = [];
 
   parsed.allRows.forEach((row) => {
+    if (row.source_sheet && row.source_sheet !== currentSheet) {
+      currentSheet = row.source_sheet;
+      const fromSheet = inferSpeciesFromSheetName(currentSheet);
+      if (fromSheet) currentGroup = fromSheet;
+    }
+
     const leadingName = extractLeadingNameColumn(row.cells);
     if (leadingName && !isDevelopmentalStageLabel(leadingName)) {
       currentGroup = leadingName;
@@ -1177,8 +1388,9 @@ export function generateRecordsFromConfirmed(params: {
   interpreted: InterpretedRow[];
   existingBeetles: Beetle[];
   existingGrowthEntries: GrowthEntry[];
+  growthSheets?: { name: string; rows: RawSheetRow[] }[];
 }): StructuredImportBuild {
-  const { interpreted, existingBeetles, existingGrowthEntries } = params;
+  const { interpreted, existingBeetles, existingGrowthEntries, growthSheets = [] } = params;
   const beetles: Beetle[] = [];
   const growthEntries: GrowthEntry[] = [];
   const speciesInventoryMap = new Map<string, SpeciesInventory>();
@@ -1343,6 +1555,16 @@ export function generateRecordsFromConfirmed(params: {
   });
 
   flushGroupDraft();
+
+  if (growthSheets.length > 0) {
+    const sheetImport = importGrowthEntriesFromSheets(
+      growthSheets,
+      [...existingBeetles, ...beetles],
+      [...existingGrowthEntries, ...growthEntries]
+    );
+    beetles.push(...sheetImport.newBeetles);
+    growthEntries.push(...sheetImport.growthEntries);
+  }
 
   return {
     beetles,

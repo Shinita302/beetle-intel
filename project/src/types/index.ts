@@ -71,6 +71,14 @@ export function activeLarvaeCount(row: SpeciesInventory): number {
   return row.l1 + row.l2 + row.l3 + row.prePupa;
 }
 
+export function totalPopulationInventory(rows: SpeciesInventory[]): number {
+  return rows.reduce((sum, row) => sum + speciesInventoryTotal(row), 0);
+}
+
+export function totalActiveLarvaeInventory(rows: SpeciesInventory[]): number {
+  return rows.reduce((sum, row) => sum + activeLarvaeCount(row), 0);
+}
+
 /** Per-beetle growth log entry. */
 export interface GrowthEntry {
   id: string;

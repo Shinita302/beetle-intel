@@ -155,6 +155,7 @@ export function ImportSpreadsheet({ beetles, growthEntries, onImportConfirmed }:
       interpreted: interpretedRows,
       existingBeetles: beetles,
       existingGrowthEntries: growthEntries,
+      growthSheets: parsedSheet?.growthSheets ?? [],
     });
     setGenerated(result);
     setStep('generate');
@@ -203,6 +204,17 @@ export function ImportSpreadsheet({ beetles, growthEntries, onImportConfirmed }:
         </label>
         {loading && <Badge variant="info" className="mt-3">Parsing…</Badge>}
         {fileName && <Badge variant="success" className="mt-3">Loaded: {fileName}</Badge>}
+        {parsedSheet && parsedSheet.sheetNames.length > 1 && (
+          <Badge variant="neutral" className="mt-3 ml-2">
+            {parsedSheet.sheetNames.length} worksheets
+          </Badge>
+        )}
+        {parsedSheet && parsedSheet.growthSheets.length > 0 && (
+          <Badge variant="info" className="mt-3 ml-2">
+            {parsedSheet.growthSheets.length} growth sheet
+            {parsedSheet.growthSheets.length === 1 ? '' : 's'} ({parsedSheet.growthSheets.map((s) => s.name).join(', ')})
+          </Badge>
+        )}
         {fileError && <Badge variant="danger" className="mt-3">{fileError}</Badge>}
       </Card>
 
