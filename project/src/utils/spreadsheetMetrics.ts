@@ -263,8 +263,8 @@ export function parseStageLabelToLifecycle(
   if (t === 'pupa' || t === 'pupae') return 'pupa';
   if (t === 'pre-pupa' || t === 'pre pupa' || t === 'prepupa') return 'pupa';
   if (/^adults?$/.test(t)) return 'adult';
-  if (/^adult\s*\(\s*(?:cb)?f\d+\+?\s*\)$/i.test(safeCellText(label))) return 'adult';
-  if (/^adult\s+(?:cb)?f\d+\+?$/i.test(safeCellText(label))) return 'adult';
+  if (/^adult\s*\(\s*(?:cb)?f\d+\+?\s*\)$/.test(t)) return 'adult';
+  if (/^adult\s+(?:cb)?f\d+\+?$/.test(t)) return 'adult';
   return null;
 }
 
