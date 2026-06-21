@@ -203,9 +203,6 @@ function applyWideBreederStageRow(
 
   return true;
 }
-  const keys = cells.map((c) => stageCellToKey(String(c ?? '').trim())).filter(Boolean);
-  return keys.length >= 2;
-}
 
 /** Extract stage/count pairs from any cell layout in a body row. */
 function extractStagePairsFromRow(cells: string[]): Array<[InventoryCountKey, number]> {
