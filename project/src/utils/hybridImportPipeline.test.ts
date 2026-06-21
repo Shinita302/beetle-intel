@@ -18,6 +18,7 @@ import {
   TRACKING_NOTE_GROWTH_SHEET,
   TRACKING_NOTE_INVENTORY_ROWS,
 } from '@/test-fixtures/trackingNoteFixture';
+import { TRACKING_NOTE_REAL_ROWS } from '@/test-fixtures/trackingNoteRealFixture';
 
 function mockParsed(rows: string[][], sheet = 'Inventory'): ParsedSpreadsheet {
   const allRows = rows.map((cells, i) => ({
@@ -53,8 +54,8 @@ describe('hybrid import pipeline', () => {
 
     expect(result.groups).toHaveLength(1);
     expect(result.groups[0].lineName).toBe('Giraffe.K');
-    expect(result.groups[0].adult).toBe(12);
-    expect(result.groups[0].l1).toBe(45);
+    expect(result.groups[0].adult).toBe(4);
+    expect(result.groups[0].l3).toBe(8);
     expect(result.groups[0].origin).toBe('CB');
     expect(result.individualBeetleCount).toBe(0);
   });
@@ -83,7 +84,7 @@ describe('hybrid import pipeline', () => {
 
     const inventory = editableGroupsToSpeciesInventory(result.groups, parsed.sheetNames[0]);
     const dashboardTotal = totalPopulationInventory(inventory);
-    expect(dashboardTotal).toBe(12 + 45 + 30 + 251);
+    expect(dashboardTotal).toBe(4 + 8 + 1);
   });
 
   it('parses Hercules F4 block with generation', async () => {
@@ -94,8 +95,7 @@ describe('hybrid import pipeline', () => {
     });
 
     expect(result.groups[0].generation).toBe('F4');
-    expect(result.groups[0].adult).toBe(24);
-    expect(result.groups[0].l1).toBe(106);
+    expect(result.groups[0].adult).toBe(1);
     expect(result.groups[0].confidence).not.toBe('low');
   });
 
@@ -146,6 +146,26 @@ describe('hybrid import pipeline', () => {
     expect(result.groupAudit.filter((a) => a.status === 'imported').length).toBe(6);
   });
 
+  it('imports real Tracking note workbook rows (6 species)', async () => {
+    const result = await runHybridImportPipeline({
+      parsed: mockParsed(TRACKING_NOTE_REAL_ROWS, 'Sheet1'),
+      fileName: 'Tracking note 2026 May-Jun.xlsx',
+      useLlmFallback: false,
+    });
+
+    expect(result.groups).toHaveLength(6);
+    expect(result.groupAudit.filter((a) => a.status === 'rejected')).toHaveLength(0);
+
+    const lamprima = result.groups.find((g) => g.lineName === 'lamprima adolphinae');
+    expect(lamprima?.eggs).toBe(17);
+    expect(lamprima?.adult).toBe(6);
+    expect(lamprima?.l3).toBe(16);
+
+    expect(result.groups.find((g) => g.lineName === 'Hercules Hercules')?.adult).toBe(1);
+    expect(result.groups.find((g) => g.lineName === 'Giraffe.K')?.l3).toBe(8);
+    expect(result.groups.find((g) => g.lineName === 'Musimon')?.adult).toBe(1);
+  });
+
   it('includes adult-only groups in audit as imported', async () => {
     const result = await runHybridImportPipeline({
       parsed: mockParsed(HPERRyi_ADULT_ONLY_BLOCK),
@@ -154,7 +174,7 @@ describe('hybrid import pipeline', () => {
     });
 
     expect(result.groups).toHaveLength(1);
-    expect(result.groups[0].adult).toBe(8);
+    expect(result.groups[0].adult).toBe(2);
     expect(result.groupAudit[0].status).toBe('imported');
   });
 });

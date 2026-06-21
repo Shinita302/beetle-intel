@@ -147,12 +147,148 @@ function parseStrictHeaderRow(row: RawSheetRow): PopulationBlockDraft {
     draft.eggs = Math.max(draft.eggs, parseEggsFromCell(cell));
   }
 
+  parseHeaderInlineCounts(draft, cells, Boolean(adultCell));
+
   return draft;
 }
 
 function assignStageCount(block: PopulationBlockDraft, key: InventoryCountKey, value: number): void {
-  if (value <= 0) return;
+  if (value < 0 || Number.isNaN(value)) return;
+  if (value === 0 && block[key] > 0) return;
   block[key] = Math.max(block[key], value);
+}
+
+function isInstarStageKey(key: InventoryCountKey): boolean {
+  return key === 'l1' || key === 'l2' || key === 'l3';
+}
+
+/**
+ * Breeder wide-row layout from Tracking note spreadsheets:
+ *   L1 | 0 | 6 | (blank) | 3 males
+ *   L3 | 16 |
+ * Col B = instar count for labeled stage; Col C = adult count (or sex label).
+ */
+function applyWideBreederStageRow(
+  block: PopulationBlockDraft,
+  cells: string[],
+  headerAdultContext: boolean
+): boolean {
+  const stageKey = stageCellToKey(cells[0]?.trim() ?? '');
+  if (!stageKey || !isInstarStageKey(stageKey)) return false;
+
+  const rest = cells.slice(1).map((c) => String(c ?? '').trim());
+  const numbers: number[] = [];
+
+  for (const cell of rest) {
+    if (!cell) continue;
+    if (isPureNumber(cell)) {
+      numbers.push(parseNumeric(cell));
+    } else if (isSexCountLabel(cell)) {
+      recordSexMetadata(block, cell);
+      if (headerAdultContext) {
+        const sexCount = extractLeadingCount(cell);
+        if (sexCount > 0) assignStageCount(block, 'adult', sexCount);
+      }
+    } else if (isObservationNoteText(cell)) {
+      if (!block.metadataNotes.includes(cell)) block.metadataNotes.push(cell);
+    }
+  }
+
+  if (numbers.length >= 1) {
+    assignStageCount(block, stageKey, numbers[0]);
+  }
+  if (numbers.length >= 2 && headerAdultContext) {
+    assignStageCount(block, 'adult', numbers[1]);
+  }
+
+  return true;
+}
+  const keys = cells.map((c) => stageCellToKey(String(c ?? '').trim())).filter(Boolean);
+  return keys.length >= 2;
+}
+
+/** Extract stage/count pairs from any cell layout in a body row. */
+function extractStagePairsFromRow(cells: string[]): Array<[InventoryCountKey, number]> {
+  const pairs: Array<[InventoryCountKey, number]> = [];
+  const trimmed = cells.map((c) => String(c ?? '').trim());
+
+  for (let i = 0; i < trimmed.length; i++) {
+    const cell = trimmed[i];
+    if (!cell) continue;
+
+    const combined = cell.match(
+      /^(L[123]|eggs?|pupa(e)?|pre-?pupa|adult(?:\s*\(\s*(?:CB|WD)?F\d+\+?\s*\))?)\s*[:|]?\s*(\d+)$/i
+    );
+    if (combined) {
+      const key = stageCellToKey(combined[1]);
+      if (key) pairs.push([key, parseNumeric(combined[2])]);
+      continue;
+    }
+
+    const key = stageCellToKey(cell);
+    if (!key) continue;
+
+    for (let j = i + 1; j < trimmed.length; j++) {
+      const next = trimmed[j];
+      if (!next) continue;
+      if (isPureNumber(next)) {
+        pairs.push([key, parseNumeric(next)]);
+        break;
+      }
+      if (isSexCountLabel(next) || isObservationNoteText(next)) break;
+    }
+  }
+
+  return pairs;
+}
+
+function extractMetadataFromRowCells(cells: string[], block: PopulationBlockDraft): void {
+  for (const cell of cells.map((c) => String(c ?? '').trim()).filter(Boolean)) {
+    if (stageCellToKey(cell) || isPureNumber(cell)) continue;
+    if (isSexCountLabel(cell)) {
+      recordSexMetadata(block, cell);
+      continue;
+    }
+    if (isObservationNoteText(cell) && !block.metadataNotes.includes(cell)) {
+      block.metadataNotes.push(cell);
+    }
+  }
+}
+
+function applyStageColumnTable(
+  block: PopulationBlockDraft,
+  headerCells: string[],
+  valueCells: string[]
+): void {
+  const width = Math.max(headerCells.length, valueCells.length);
+  for (let i = 0; i < width; i++) {
+    const key = stageCellToKey(String(headerCells[i] ?? '').trim());
+    const raw = String(valueCells[i] ?? '').trim();
+    if (key && raw && isPureNumber(raw)) {
+      assignStageCount(block, key, parseNumeric(raw));
+    }
+  }
+}
+
+function parseHeaderInlineCounts(draft: PopulationBlockDraft, cells: string[], headerAdultContext: boolean): void {
+  for (const cell of cells.map((c) => String(c ?? '').trim()).filter(Boolean)) {
+    draft.eggs = Math.max(draft.eggs, parseEggsFromCell(cell));
+    const inlineStage = cell.match(
+      /^(L[123]|eggs?|pupa(e)?|pre-?pupa|adult(?:\s*\(\s*(?:CB|WD)?F\d+\+?\s*\))?)\s*[:|]?\s*(\d+)$/i
+    );
+    if (inlineStage) {
+      const key = stageCellToKey(inlineStage[1]);
+      if (key) assignStageCount(draft, key, parseNumeric(inlineStage[2]));
+    }
+  }
+
+  const orphanNumerics = cells
+    .map((c) => String(c ?? '').trim())
+    .filter((c) => c && isPureNumber(c))
+    .map(parseNumeric);
+  if (orphanNumerics.length === 1 && headerAdultContext) {
+    assignStageCount(draft, 'adult', orphanNumerics[0]);
+  }
 }
 
 /** Parse one body row into stage counts and metadata — never changes species. */
@@ -163,6 +299,19 @@ function applyBodyRow(block: PopulationBlockDraft, row: RawSheetRow, headerAdult
   block.bodyRowCount += 1;
 
   if (isEmptyRow(cells)) return;
+
+  if (applyWideBreederStageRow(block, cells, headerAdultContext)) {
+    return;
+  }
+
+  const stagePairs = extractStagePairsFromRow(cells);
+  if (stagePairs.length > 0) {
+    for (const [key, value] of stagePairs) {
+      assignStageCount(block, key, value);
+    }
+    extractMetadataFromRowCells(cells, block);
+    return;
+  }
 
   for (const cell of cells) {
     if (cell) recordSexMetadata(block, cell);
@@ -181,58 +330,67 @@ function applyBodyRow(block: PopulationBlockDraft, row: RawSheetRow, headerAdult
     }
   }
 
-  if (isObservationNoteText(rawText)) {
-    block.metadataNotes.push(rawText);
-    return;
-  }
-
-  const stageIndex = cells.findIndex((c) => c && stageCellToKey(c));
-  if (stageIndex >= 0) {
-    const stageKey = stageCellToKey(cells[stageIndex])!;
-    const trailing = cells.slice(stageIndex + 1);
-    const numericValues = trailing.filter((c) => c && isPureNumber(c)).map(parseNumeric);
-
-    if (numericValues.length >= 1) {
-      assignStageCount(block, stageKey, numericValues[0]);
-    }
-    if (numericValues.length >= 2 && headerAdultContext) {
-      assignStageCount(block, 'adult', numericValues[1]);
-    }
-    return;
-  }
-
   const adultIndex = cells.findIndex((c) => c && /^adults?(\s*\(|$)/i.test(c));
   if (adultIndex >= 0) {
     const num = cells.slice(adultIndex + 1).find((c) => c && isPureNumber(c));
     if (num) assignStageCount(block, 'adult', parseNumeric(num));
     const gen = parseGenerationFromStageLabel(cells[adultIndex]);
     if (gen) block.generation = gen;
-    return;
-  }
-
-  const eggIndex = cells.findIndex((c) => /^eggs?$/i.test(c));
-  if (eggIndex >= 0) {
-    const num = cells.slice(eggIndex + 1).find((c) => c && isPureNumber(c));
-    if (num) assignStageCount(block, 'eggs', parseNumeric(num));
-    return;
-  }
-
-  const pupaIndex = cells.findIndex((c) => /^pupa(e)?$/i.test(c));
-  if (pupaIndex >= 0) {
-    const num = cells.slice(pupaIndex + 1).find((c) => c && isPureNumber(c));
-    if (num) assignStageCount(block, 'pupa', parseNumeric(num));
+    extractMetadataFromRowCells(cells, block);
     return;
   }
 
   const numericOnly = cells.filter((c) => c && isPureNumber(c));
-  const nonMetaText = cells.filter((c) => c && !isPureNumber(c) && !isSexCountLabel(c));
+  const nonMetaText = cells.filter(
+    (c) => c && !isPureNumber(c) && !isSexCountLabel(c) && !stageCellToKey(c)
+  );
+
+  if (numericOnly.length >= 3 && nonMetaText.length === 0) {
+    const [n1, n2, n3, n4] = numericOnly.map(parseNumeric);
+    assignStageCount(block, 'l1', n1);
+    assignStageCount(block, 'l2', n2);
+    assignStageCount(block, 'l3', n3);
+    if (n4 > 0) assignStageCount(block, 'adult', n4);
+    else if (headerAdultContext && numericOnly.length === 1) assignStageCount(block, 'adult', n1);
+    return;
+  }
+
   if (numericOnly.length > 0 && nonMetaText.length === 0) {
     if (headerAdultContext) assignStageCount(block, 'adult', parseNumeric(numericOnly[0]));
     return;
   }
 
-  if (nonMetaText.length > 0) {
+  extractMetadataFromRowCells(cells, block);
+  if (block.metadataNotes.length === 0 && rawText && isObservationNoteText(rawText)) {
     block.metadataNotes.push(rawText);
+  }
+}
+
+function isStageColumnHeaderRow(cells: string[]): boolean {
+  const keys = cells.map((c) => stageCellToKey(String(c ?? '').trim())).filter(Boolean);
+  return keys.length >= 2;
+}
+
+function applyBodyRows(
+  block: PopulationBlockDraft,
+  bodyRows: RawSheetRow[],
+  headerAdultContext: boolean
+): void {
+  for (let i = 0; i < bodyRows.length; i++) {
+    const row = bodyRows[i];
+    const cells = row.cells.map((c) => String(c ?? '').trim());
+
+    if (isStageColumnHeaderRow(cells) && i + 1 < bodyRows.length) {
+      const valueCells = bodyRows[i + 1].cells.map((c) => String(c ?? '').trim());
+      applyStageColumnTable(block, cells, valueCells);
+      block.endRow = bodyRows[i + 1].source_row;
+      block.bodyRowCount += 2;
+      extractMetadataFromRowCells(valueCells, block);
+      i += 1;
+      continue;
+    }
+
+    applyBodyRow(block, row, headerAdultContext);
   }
 }
 
@@ -288,8 +446,8 @@ export function parsePopulationBlocks(allRows: RawSheetRow[]): PopulationBlockPa
 
     for (const bodyRow of segment.body) {
       consumedRows.add(bodyRow.source_row);
-      applyBodyRow(draft, bodyRow, headerAdultContext);
     }
+    applyBodyRows(draft, segment.body, headerAdultContext);
 
     const finalized = finalizeBlock(draft);
     if (finalized) {
