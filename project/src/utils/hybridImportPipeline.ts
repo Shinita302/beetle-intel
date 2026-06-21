@@ -23,6 +23,7 @@ import {
 import {
   generateRecordsFromConfirmed,
   interpretRawRows,
+  normalizeRawSheetRow,
   type ParsedSpreadsheet,
 } from './importSpreadsheet';
 import { parseBlockWithLlm, isLlmFallbackAvailable } from './importLlmFallback';
@@ -109,8 +110,17 @@ export async function runHybridImportPipeline(params: {
   useLlmFallback?: boolean;
 }): Promise<HybridImportResult> {
   const { parsed, fileName, userId, useLlmFallback = true } = params;
-  const blockParse = parsePopulationBlocks(parsed.allRows);
-  const interpreted = interpretRawRows(parsed);
+  const normalizedParsed: ParsedSpreadsheet = {
+    ...parsed,
+    allRows: parsed.allRows.map(normalizeRawSheetRow),
+    rows: parsed.rows.map(normalizeRawSheetRow),
+    growthSheets: parsed.growthSheets.map((sheet) => ({
+      ...sheet,
+      rows: sheet.rows.map(normalizeRawSheetRow),
+    })),
+  };
+  const blockParse = parsePopulationBlocks(normalizedParsed.allRows);
+  const interpreted = interpretRawRows(normalizedParsed);
   const rules = userId ? loadCorrectionRules(userId) : [];
 
   let usedLlmFallback = false;
@@ -188,19 +198,19 @@ export async function runHybridImportPipeline(params: {
     interpreted: interpreted.filter((row) => row.user_meaning === 'individual-beetle'),
     existingBeetles: [],
     existingGrowthEntries: [],
-    growthSheets: parsed.growthSheets,
+    growthSheets: normalizedParsed.growthSheets,
     sourceFileName: fileName,
     sheetNames: parsed.sheetNames,
   });
 
   const inventorySheetNames = new Set(
-    parsed.allRows.map((r) => r.source_sheet).filter(Boolean) as string[]
+    normalizedParsed.allRows.map((r) => r.source_sheet).filter(Boolean) as string[]
   );
-  const growthSheetNames = new Set(parsed.growthSheets.map((s) => s.name));
-  const sheetsProcessed = parsed.sheetNames.filter(
+  const growthSheetNames = new Set(normalizedParsed.growthSheets.map((s) => s.name));
+  const sheetsProcessed = normalizedParsed.sheetNames.filter(
     (n) => inventorySheetNames.has(n) || growthSheetNames.has(n)
   );
-  const sheetsSkipped = parsed.sheetNames.filter((n) => !sheetsProcessed.includes(n));
+  const sheetsSkipped = normalizedParsed.sheetNames.filter((n) => !sheetsProcessed.includes(n));
 
   return {
     groups,
@@ -209,7 +219,7 @@ export async function runHybridImportPipeline(params: {
     groupAudit,
     sheetsProcessed,
     sheetsSkipped,
-    growthSheetsImported: parsed.growthSheets.map((s) => s.name),
+    growthSheetsImported: normalizedParsed.growthSheets.map((s) => s.name),
     individualBeetleCount: beetleResult.beetles.length,
     growthEntryCount: beetleResult.growthEntries.length,
     usedLlmFallback,

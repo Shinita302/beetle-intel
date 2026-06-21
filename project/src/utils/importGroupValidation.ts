@@ -5,6 +5,7 @@ import {
   isValidSpeciesFromHeader,
   parseStrictGeneration,
   parseStrictOrigin,
+  safeCellText,
 } from './importFieldParsing';
 
 export function computeGroupTotal(group: Pick<
@@ -17,7 +18,7 @@ export function computeGroupTotal(group: Pick<
 /** Validate a population group before import. */
 export function validateImportGroup(group: EditableImportGroup): string[] {
   const warnings: string[] = [];
-  const line = group.lineName.trim() || group.species.trim();
+  const line = safeCellText(group.lineName) || safeCellText(group.species);
 
   if (!line) {
     warnings.push('Missing species/line name');

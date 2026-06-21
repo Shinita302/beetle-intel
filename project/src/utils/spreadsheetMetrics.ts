@@ -254,7 +254,7 @@ function stageLabelToLifecycle(label: string): 'egg' | 'L1' | 'L2' | 'L3' | 'pup
 export function parseStageLabelToLifecycle(
   label: string
 ): 'egg' | 'L1' | 'L2' | 'L3' | 'pupa' | 'adult' | null {
-  const t = label.trim().toLowerCase();
+  const t = String(label ?? '').trim().toLowerCase();
   if (t === 'l1' || t === 'l 1' || t === 'larva 1' || t === 'instar 1') return 'L1';
   if (t === 'l2' || t === 'l 2' || t === 'larva 2' || t === 'instar 2') return 'L2';
   if (t === 'l3' || t === 'l 3' || t === 'larva 3' || t === 'instar 3' || t === 'larva' || t === 'larvae')
@@ -263,14 +263,14 @@ export function parseStageLabelToLifecycle(
   if (t === 'pupa' || t === 'pupae') return 'pupa';
   if (t === 'pre-pupa' || t === 'pre pupa' || t === 'prepupa') return 'pupa';
   if (/^adults?$/.test(t)) return 'adult';
-  if (/^adult\s*\(\s*(?:cb)?f\d+\+?\s*\)$/i.test(label.trim())) return 'adult';
-  if (/^adult\s+(?:cb)?f\d+\+?$/i.test(label.trim())) return 'adult';
+  if (/^adult\s*\(\s*(?:cb)?f\d+\+?\s*\)$/i.test(safeCellText(label))) return 'adult';
+  if (/^adult\s+(?:cb)?f\d+\+?$/i.test(safeCellText(label))) return 'adult';
   return null;
 }
 
 /** Extract generation from labels like adult(F4) or adult(F4+). */
 export function parseGenerationFromStageLabel(label: string): string {
-  const match = label.trim().match(/(?:\(\s*(?:CB)?(F\d+\+?)\s*\)|\b(CB)?(F\d+\+?)\b)/i);
+  const match = String(label ?? '').trim().match(/(?:\(\s*(?:CB)?(F\d+\+?)\s*\)|\b(CB)?(F\d+\+?)\b)/i);
   if (!match) return '';
   const gen = (match[1] || match[3] || '').toUpperCase();
   const cb = match[2] ? 'CB' : '';

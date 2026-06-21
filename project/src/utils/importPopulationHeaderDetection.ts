@@ -3,27 +3,28 @@ import {
   isSexCountLabel,
   isValidLineName,
   parseStrictOrigin,
+  safeCellText,
 } from './importFieldParsing';
 import { parseStageLabelToLifecycle } from './spreadsheetMetrics';
 
 function isPureNumber(value: string): boolean {
-  return /^\d+(\.\d+)?$/.test(value.trim());
+  return /^\d+(\.\d+)?$/.test(safeCellText(value));
 }
 
 function isHeadcountCategory(value: string): boolean {
-  return /headcount|population|inventory/i.test(value.trim());
+  return /headcount|population|inventory/i.test(safeCellText(value));
 }
 
 function isAdultLabel(value: string): boolean {
-  return parseStageLabelToLifecycle(value) === 'adult';
+  return parseStageLabelToLifecycle(safeCellText(value)) === 'adult';
 }
 
 function isDevelopmentalStageLabel(value: string): boolean {
-  return Boolean(parseStageLabelToLifecycle(value.trim()));
+  return Boolean(parseStageLabelToLifecycle(safeCellText(value)));
 }
 
 function isMetaInventoryCell(value: string): boolean {
-  const t = value.trim();
+  const t = safeCellText(value);
   return (
     isHeadcountCategory(t) ||
     Boolean(parseStrictOrigin(t)) ||
@@ -33,12 +34,12 @@ function isMetaInventoryCell(value: string): boolean {
 }
 
 function extractNonNumericText(cells: string[]): string[] {
-  return cells.filter((c) => c.trim() && !isPureNumber(c));
+  return cells.filter((c) => safeCellText(c) && !isPureNumber(c));
 }
 
 function extractLeadingNameColumn(cells: string[]): string {
   for (const cell of cells) {
-    const trimmed = cell.trim();
+    const trimmed = safeCellText(cell);
     if (!trimmed || isPureNumber(trimmed)) continue;
     if (isDevelopmentalStageLabel(trimmed)) continue;
     if (isMetaInventoryCell(trimmed)) continue;
@@ -66,12 +67,12 @@ function isGroupAnchorRow(cells: string[]): boolean {
 
   const hasInstarStage = textCells.some((cell) => {
     const lifecycle = parseStageLabelToLifecycle(cell);
-    return lifecycle === 'L1' || lifecycle === 'L2' || lifecycle === 'L3' || /^l[123]$/i.test(cell.trim());
+    return lifecycle === 'L1' || lifecycle === 'L2' || lifecycle === 'L3' || /^l[123]$/i.test(safeCellText(cell));
   });
   if (hasInstarStage) return false;
 
   const leadingName = extractLeadingNameColumn(cells);
-  const speciesName = nonStageCells.find((cell) => cell.trim().length > 1) || leadingName;
+  const speciesName = nonStageCells.find((cell) => safeCellText(cell).length > 1) || leadingName;
   const hasStageMarker = textCells.some((cell) => isDevelopmentalStageLabel(cell));
 
   if (speciesName && hasStageMarker) return true;
@@ -86,7 +87,7 @@ function isGroupAnchorRow(cells: string[]): boolean {
 }
 
 function splitNameAndStageMarker(text: string): { name: string; stage: ReturnType<typeof parseStageLabelToLifecycle> } {
-  const trimmed = text.trim();
+  const trimmed = safeCellText(text);
   if (!trimmed) return { name: '', stage: null };
 
   const trailing = trimmed.match(/^(.+?)\s+(adult|larva|pupa|egg|juvenile|nymph)s?$/i);
@@ -123,9 +124,9 @@ function isHorizontalInventoryRow(cells: string[]): boolean {
  */
 export function looksLikePopulationGroupHeader(cells: string[], fullText: string): boolean {
   if (isObservationNoteText(fullText)) return false;
-  if (isSexCountLabel(fullText.trim())) return false;
+  if (isSexCountLabel(safeCellText(fullText))) return false;
 
-  const textCells = cells.map((c) => c.trim()).filter(Boolean);
+  const textCells = cells.map((c) => safeCellText(c)).filter(Boolean);
   if (textCells.length === 0) return false;
 
   if (textCells.length === 1 && isSexCountLabel(textCells[0])) return false;
@@ -153,7 +154,7 @@ export function looksLikePopulationGroupHeader(cells: string[], fullText: string
 }
 
 export function inferSpeciesFromHeaderCells(cells: string[]): string {
-  const textCells = cells.map((c) => c.trim()).filter(Boolean);
+  const textCells = cells.map((c) => safeCellText(c)).filter(Boolean);
   return (
     textCells.find((c) => isValidLineName(c) && !isMetaInventoryCell(c)) ||
     extractLeadingNameColumn(cells) ||

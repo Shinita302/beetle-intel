@@ -4,8 +4,12 @@ const STRICT_GENERATION_RE = /^(?:CBF|WDF|F)(\d+\+?)$/i;
 /** Strict origin tokens: CB, WC, WD, CBF1, WDF1, etc. */
 const STRICT_ORIGIN_RE = /^(?:CB|WC|WD|CBF|WDF)(\d+\+?)?$/i;
 
+export function safeCellText(value: unknown): string {
+  return String(value ?? '').trim();
+}
+
 export function parseStrictGeneration(raw: string): string {
-  const trimmed = raw.trim();
+  const trimmed = safeCellText(raw);
   if (!trimmed) return '';
 
   const fromAdult = trimmed.match(/\(\s*(?:CB|WD)?(F\d+\+?)\s*\)/i);
@@ -23,7 +27,7 @@ export function parseStrictGeneration(raw: string): string {
 }
 
 export function parseStrictOrigin(raw: string): string {
-  const trimmed = raw.trim().toUpperCase();
+  const trimmed = safeCellText(raw).toUpperCase();
   if (!trimmed) return '';
   if (STRICT_ORIGIN_RE.test(trimmed)) return trimmed;
   return '';
@@ -53,7 +57,7 @@ const DAY_FIRST_DATE_RE =
 
 /** Sex breakdown sub-rows under a population header (e.g. "3 males", "1(Male)"). */
 export function isSexCountLabel(text: string): boolean {
-  const t = text.trim();
+  const t = safeCellText(text);
   if (!t) return false;
   if (/^\d+\s*(?:males?|females?)$/i.test(t)) return true;
   if (/^\d+\s+(?:male|female)s?$/i.test(t)) return true;
@@ -64,7 +68,7 @@ export function isSexCountLabel(text: string): boolean {
 
 /** Date/size/sex observation rows — not inventory groups. */
 export function isObservationNoteText(text: string): boolean {
-  const t = text.trim();
+  const t = safeCellText(text);
   if (!t) return false;
 
   if (isSexCountLabel(t)) return true;
@@ -80,7 +84,7 @@ export function isObservationNoteText(text: string): boolean {
 }
 
 export function isValidLineName(text: string): boolean {
-  const t = text.trim();
+  const t = safeCellText(text);
   if (!t || t.length < 2) return false;
   if (t.includes('|')) return false;
   if (isObservationNoteText(t)) return false;
@@ -96,7 +100,7 @@ export function isValidLineName(text: string): boolean {
 
 /** Species/line names may only come from strict population header rows. */
 export function isValidSpeciesFromHeader(text: string): boolean {
-  const t = text.trim();
+  const t = safeCellText(text);
   if (!isValidLineName(t)) return false;
   if (/^\d/.test(t)) return false;
   if (/\b(male|female|♂|♀)\b/i.test(t)) return false;
@@ -107,17 +111,18 @@ export function isValidSpeciesFromHeader(text: string): boolean {
 }
 
 function isHeadcountCell(value: string): boolean {
-  return /^headcount$/i.test(value.trim()) || /^(population|inventory)$/i.test(value.trim());
+  const t = safeCellText(value);
+  return /^headcount$/i.test(t) || /^(population|inventory)$/i.test(t);
 }
 
 function isAdultHeaderCell(value: string): boolean {
-  const t = value.trim();
+  const t = safeCellText(value);
   return /^adults?$/i.test(t) || /^adult\s*\(\s*(?:CB|WD)?F\d+\+?\s*\)$/i.test(t);
 }
 
 /** Strict breeder header: species + headcount + adult + origin on one row. */
 export function isStrictPopulationHeaderRow(cells: string[]): boolean {
-  const textCells = cells.map((c) => c.trim()).filter(Boolean);
+  const textCells = (cells ?? []).map((c) => safeCellText(c)).filter(Boolean);
   if (textCells.length === 0) return false;
 
   const species = textCells.find((c) => isValidSpeciesFromHeader(c));

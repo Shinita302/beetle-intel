@@ -9,6 +9,7 @@ import {
   parseGenerationFromCells,
   parseOriginFromCells,
   parseStrictGeneration,
+  safeCellText,
   type InventoryCountKey,
 } from './importFieldParsing';
 import { parseGenerationFromStageLabel, parseStageLabelToLifecycle } from './spreadsheetMetrics';
@@ -51,35 +52,35 @@ function isEmptyRow(cells: string[]): boolean {
 }
 
 function isPureNumber(value: string): boolean {
-  return /^\d+(\.\d+)?$/.test(value.trim());
+  return /^\d+(\.\d+)?$/.test(safeCellText(value));
 }
 
 function parseNumeric(raw: string): number {
-  const m = raw.trim().match(/(\d+(?:\.\d+)?)/);
+  const m = safeCellText(raw).match(/(\d+(?:\.\d+)?)/);
   if (!m) return 0;
   const n = Number(m[1]);
   return Number.isFinite(n) ? n : 0;
 }
 
 function extractLeadingCount(text: string): number {
-  const m = text.trim().match(/^(\d+)/);
+  const m = safeCellText(text).match(/^(\d+)/);
   return m ? parseNumeric(m[1]) : 0;
 }
 
 function isAdultHeaderCell(value: string): boolean {
-  const t = value.trim();
+  const t = safeCellText(value);
   return /^adults?$/i.test(t) || /^adult\s*\(\s*(?:CB|WD)?F\d+\+?\s*\)$/i.test(t);
 }
 
 function stageCellToKey(cell: string): InventoryCountKey | null {
-  const lifecycle = parseStageLabelToLifecycle(cell.trim());
+  const lifecycle = parseStageLabelToLifecycle(safeCellText(cell));
   if (lifecycle === 'egg') return 'eggs';
   if (lifecycle === 'L1') return 'l1';
   if (lifecycle === 'L2') return 'l2';
   if (lifecycle === 'L3') return 'l3';
   if (lifecycle === 'pupa') return 'pupa';
   if (lifecycle === 'adult') return 'adult';
-  const lower = cell.trim().toLowerCase();
+  const lower = safeCellText(cell).toLowerCase();
   if (lower === 'pre-pupa' || lower === 'prepupa') return 'prePupa';
   return null;
 }
@@ -112,7 +113,7 @@ function emptyBlockDraft(): Omit<
 }
 
 function recordSexMetadata(block: PopulationBlockDraft, text: string): void {
-  const t = text.trim();
+  const t = safeCellText(text);
   if (!isSexCountLabel(t)) return;
   const count = extractLeadingCount(t);
   if (/female/i.test(t)) block.females = Math.max(block.females, count);
@@ -173,7 +174,7 @@ function applyWideBreederStageRow(
   cells: string[],
   headerAdultContext: boolean
 ): boolean {
-  const stageKey = stageCellToKey(cells[0]?.trim() ?? '');
+  const stageKey = stageCellToKey(cells[0] ?? '');
   if (!stageKey || !isInstarStageKey(stageKey)) return false;
 
   const rest = cells.slice(1).map((c) => String(c ?? '').trim());
@@ -290,8 +291,8 @@ function parseHeaderInlineCounts(draft: PopulationBlockDraft, cells: string[], h
 
 /** Parse one body row into stage counts and metadata — never changes species. */
 function applyBodyRow(block: PopulationBlockDraft, row: RawSheetRow, headerAdultContext: boolean): void {
-  const cells = row.cells.map((c) => String(c ?? '').trim());
-  const rawText = row.raw_text.trim();
+  const cells = (row.cells ?? []).map((c) => safeCellText(c));
+  const rawText = safeCellText(row.raw_text);
   block.endRow = row.source_row;
   block.bodyRowCount += 1;
 
@@ -412,9 +413,9 @@ export function segmentPopulationBlocks(allRows: RawSheetRow[]): Array<{ header:
   let current: { header: RawSheetRow; body: RawSheetRow[] } | null = null;
 
   for (const row of allRows) {
-    if (isEmptyRow(row.cells)) continue;
+    if (!Array.isArray(row.cells) || isEmptyRow(row.cells)) continue;
 
-    if (isStrictPopulationHeaderRow(row.cells.map((c) => String(c ?? '')))) {
+    if (isStrictPopulationHeaderRow(row.cells.map((c) => safeCellText(c)))) {
       if (current) segments.push(current);
       current = { header: row, body: [] };
       continue;
@@ -461,10 +462,10 @@ export function parsePopulationBlocks(allRows: RawSheetRow[]): PopulationBlockPa
 
   for (const row of allRows) {
     if (consumedRows.has(row.source_row)) continue;
-    if (isEmptyRow(row.cells)) continue;
-    const text = row.raw_text.trim();
+    if (!Array.isArray(row.cells) || isEmptyRow(row.cells)) continue;
+    const text = safeCellText(row.raw_text);
     if (!text) continue;
-    if (isStrictPopulationHeaderRow(row.cells.map((c) => String(c ?? '')))) continue;
+    if (isStrictPopulationHeaderRow(row.cells.map((c) => safeCellText(c)))) continue;
     skippedNotes.push(text);
   }
 

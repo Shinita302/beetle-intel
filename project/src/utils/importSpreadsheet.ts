@@ -27,6 +27,7 @@ import {
   parseOriginFromCells,
   parseStrictGeneration,
   parseStrictOrigin,
+  safeCellText,
   type InventoryCountKey,
 } from './importFieldParsing';
 import {
@@ -254,15 +255,15 @@ export function rowMeaningLabel(meaning: RowMeaning): string {
 }
 
 function normalize(value: string): string {
-  return value.trim().toLowerCase();
+  return String(value ?? '').trim().toLowerCase();
 }
 
 function isPureNumber(value: string): boolean {
-  return /^\d+(\.\d+)?$/.test(value.trim());
+  return /^\d+(\.\d+)?$/.test(String(value ?? '').trim());
 }
 
 function isEmptyRow(cells: string[]): boolean {
-  return cells.every((c) => !c.trim());
+  return (cells ?? []).every((c) => !String(c ?? '').trim());
 }
 
 function parseSex(raw: string): BeetleSex | '' {
@@ -292,7 +293,7 @@ function instarFromStageLabel(label: string): 'L1' | 'L2' | 'L3' {
 }
 
 export function detectDevelopmentalStage(text: string): StageDetection | null {
-  const trimmed = text.trim();
+  const trimmed = safeCellText(text);
   if (!trimmed) return null;
 
   const lower = normalize(trimmed);
@@ -545,14 +546,25 @@ function nextBeetleId(existingCount: number, index: number): string {
 }
 
 function matrixToRows(matrix: string[][]): RawSheetRow[] {
-  return matrix.map((cells, i) => {
-    const safeCells = cells.map((cell) => String(cell ?? '').trim());
-    return {
-      source_row: i + 1,
-      cells: safeCells,
-      raw_text: safeCells.join(' | ').trim(),
-    };
-  });
+  return matrix.map((cells, i) => normalizeRawSheetRow({
+    source_row: i + 1,
+    cells: Array.isArray(cells) ? cells : [],
+    raw_text: '',
+  }));
+}
+
+/** Ensure every parsed row has string cells and raw_text (avoids undefined.trim crashes). */
+export function normalizeRawSheetRow(row: RawSheetRow): RawSheetRow {
+  const cells = Array.isArray(row.cells)
+    ? row.cells.map((cell) => String(cell ?? '').trim())
+    : [];
+  const raw_text = String(row.raw_text ?? cells.filter(Boolean).join(' | ')).trim();
+  return {
+    source_row: row.source_row,
+    source_sheet: row.source_sheet,
+    cells,
+    raw_text,
+  };
 }
 
 const SHEET_SPECIES_ALIASES: Record<string, string> = {
@@ -783,10 +795,22 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
     throw new Error('Unsupported file type. Upload CSV or XLSX.');
   }
 
-  const nonEmptyRows = allRows.filter((row) => !isEmptyRow(row.cells));
+  const nonEmptyRows = allRows.map(normalizeRawSheetRow).filter((row) => !isEmptyRow(row.cells));
   const style = detectSpreadsheetStyle(nonEmptyRows);
   const headers = nonEmptyRows[0]?.cells ?? [];
-  return { headers, rows: nonEmptyRows, style, allRows, growthSheets, sheetNames };
+  const normalizedAllRows = allRows.map(normalizeRawSheetRow);
+  const normalizedGrowthSheets = growthSheets.map((sheet) => ({
+    ...sheet,
+    rows: sheet.rows.map(normalizeRawSheetRow),
+  }));
+  return {
+    headers,
+    rows: nonEmptyRows,
+    style,
+    allRows: normalizedAllRows,
+    growthSheets: normalizedGrowthSheets,
+    sheetNames,
+  };
 }
 
 export function detectSpreadsheetStyle(rows: RawSheetRow[]): SpreadsheetStyle {
@@ -802,11 +826,11 @@ export function detectSpreadsheetStyle(rows: RawSheetRow[]): SpreadsheetStyle {
 }
 
 function extractNumbers(cells: string[]): string[] {
-  return cells.filter((c) => isPureNumber(c) || /^\d+(\.\d+)?\s*(g|mm)?$/i.test(c.trim()));
+  return cells.filter((c) => isPureNumber(c) || /^\d+(\.\d+)?\s*(g|mm)?$/i.test(safeCellText(c)));
 }
 
 function extractNonNumericText(cells: string[]): string[] {
-  return cells.filter((c) => c.trim() && !isPureNumber(c));
+  return cells.filter((c) => safeCellText(c) && !isPureNumber(c));
 }
 
 function isAdultLabel(value: string): boolean {
@@ -1253,7 +1277,7 @@ function parsePopulationHeaderFields(cells: string[], _fullText: string): {
   headerAdultCount: number;
   headerStageLabel: string;
 } {
-  const textCells = cells.map((c) => c.trim()).filter(Boolean);
+  const textCells = cells.map((c) => String(c ?? '').trim()).filter(Boolean);
   const category = textCells.find((c) => isHeadcountCategory(c)) ?? '';
   const origin = parseOriginFromCells(textCells);
 
@@ -1333,7 +1357,7 @@ function createInventoryGroupDraft(row: InterpretedRow, cells: string[]): Invent
 
 /** Parse stage/count pairs on the same row as the group header (e.g. L1 | 106 | adult | 24). */
 function applySameRowStageCounts(draft: InventoryGroupDraft, cells: string[]): void {
-  const nonEmpty = cells.map((c) => c.trim()).filter(Boolean);
+  const nonEmpty = cells.map((c) => safeCellText(c)).filter(Boolean);
   for (let i = 0; i < nonEmpty.length - 1; i++) {
     const inventoryKey = inventoryKeyFromLabel(nonEmpty[i]);
     const count = parseNumeric(nonEmpty[i + 1]);
