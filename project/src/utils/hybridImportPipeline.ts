@@ -220,6 +220,7 @@ export async function runHybridImportPipeline(params: {
     sheetsProcessed,
     sheetsSkipped,
     growthSheetsImported: normalizedParsed.growthSheets.map((s) => s.name),
+    growthAudit: beetleResult.growthAudit,
     individualBeetleCount: beetleResult.beetles.length,
     growthEntryCount: beetleResult.growthEntries.length,
     usedLlmFallback,

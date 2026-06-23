@@ -1,4 +1,5 @@
 import type { InterpretedRow } from '@/utils/importSpreadsheet';
+import type { GrowthImportAudit } from '@/utils/importGrowthSheet';
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low';
 export type ImportParseSource = 'deterministic' | 'llm' | 'user-edited';
@@ -76,6 +77,7 @@ export interface HybridImportResult {
   sheetsProcessed: string[];
   sheetsSkipped: string[];
   growthSheetsImported: string[];
+  growthAudit?: GrowthImportAudit;
   individualBeetleCount: number;
   growthEntryCount: number;
   usedLlmFallback: boolean;

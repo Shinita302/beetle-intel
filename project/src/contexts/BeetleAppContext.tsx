@@ -20,6 +20,7 @@ import {
   normalizePairings,
   normalizeSpeciesInventory,
 } from '@/utils/migrateLegacyData';
+import { remapGrowthEntriesToSavedBeetles } from '@/utils/importGrowthSheet';
 import {
   mockBeetles,
   mockGrowthEntries,
@@ -197,12 +198,23 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
     }) => {
       await run(async () => {
         const supabase = createClient();
+        let growthEntriesToStore = payload.growthEntries;
+
         if (payload.beetles.length > 0) {
           const rows = await insertBeetlesForUser(supabase, userId, payload.beetles);
-          setBeetles((prev) => [...dbBeetlesToBeetles(rows), ...prev]);
+          const savedBeetles = dbBeetlesToBeetles(rows);
+          setBeetles((prev) => [...savedBeetles, ...prev]);
+          if (growthEntriesToStore.length > 0) {
+            growthEntriesToStore = remapGrowthEntriesToSavedBeetles(
+              payload.beetles,
+              savedBeetles,
+              growthEntriesToStore
+            );
+          }
         }
-        if (payload.growthEntries.length > 0) {
-          setGrowthEntries((prev) => [...payload.growthEntries, ...prev]);
+
+        if (growthEntriesToStore.length > 0) {
+          setGrowthEntries((prev) => [...growthEntriesToStore, ...prev]);
         }
         if (payload.speciesInventory && payload.speciesInventory.length > 0) {
           setSpeciesInventory((prev) => mergeSpeciesInventory(prev, payload.speciesInventory!));

@@ -130,6 +130,7 @@ describe('Tracking note fixture — full inventory + growth', () => {
     expect(result.summary.inventoryGroupsCreated).toBe(2);
     expect(result.summary.importedGrowthEntries).toBeGreaterThan(0);
     expect(result.summary.growthSheetsImported).toEqual(['DHH']);
+    expect(result.growthAudit?.importedGrowthRecordCount).toBe(result.summary.importedGrowthEntries);
     expect(result.summary.sheetsSkipped).toContain('Notes');
 
     const inventoryTotal = totalPopulationInventory(result.speciesInventory);

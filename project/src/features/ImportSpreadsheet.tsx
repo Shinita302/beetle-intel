@@ -237,7 +237,55 @@ export function ImportSpreadsheet({ beetles, growthEntries, userId, onImportConf
               {hybridResult.sheetsSkipped.length > 0 && (
                 <Badge variant="warning">Skipped sheets: {hybridResult.sheetsSkipped.join(', ')}</Badge>
               )}
+              {hybridResult.growthSheetsImported.length > 0 && (
+                <Badge variant="info">
+                  Growth sheets: {hybridResult.growthSheetsImported.join(', ')}
+                </Badge>
+              )}
             </div>
+            {hybridResult.growthAudit && (
+              <div className="mb-4 p-3 border border-gray-800 rounded-lg space-y-2">
+                <p className="text-xs font-medium text-gray-300">Larval growth validation</p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="success">
+                    {hybridResult.growthAudit.importedBeetleIds.length} larva IDs
+                  </Badge>
+                  <Badge variant="info">
+                    {hybridResult.growthAudit.importedGrowthRecordCount} /{' '}
+                    {hybridResult.growthAudit.excelGrowthRecordCount} growth records
+                  </Badge>
+                  {hybridResult.growthAudit.missingBeetleIds.length > 0 && (
+                    <Badge variant="danger">
+                      {hybridResult.growthAudit.missingBeetleIds.length} missing IDs
+                    </Badge>
+                  )}
+                  {hybridResult.growthAudit.skippedRows.length > 0 && (
+                    <Badge variant="warning">
+                      {hybridResult.growthAudit.skippedRows.length} skipped rows
+                    </Badge>
+                  )}
+                </div>
+                {hybridResult.growthAudit.missingBeetleIds.length > 0 && (
+                  <p className="text-xs text-rose-400">
+                    Missing from import: {hybridResult.growthAudit.missingBeetleIds.slice(0, 20).join(', ')}
+                    {hybridResult.growthAudit.missingBeetleIds.length > 20 ? '…' : ''}
+                  </p>
+                )}
+                {hybridResult.growthAudit.skippedRows.length > 0 && (
+                  <div className="max-h-32 overflow-y-auto text-xs text-gray-500 space-y-1">
+                    {hybridResult.growthAudit.skippedRows.slice(0, 8).map((row, index) => (
+                      <p key={`${row.sourceRow}-${index}`}>
+                        Row {row.sourceRow}
+                        {row.sourceSheet ? ` (${row.sourceSheet})` : ''}: {row.reason}
+                      </p>
+                    ))}
+                    {hybridResult.growthAudit.skippedRows.length > 8 && (
+                      <p>…and {hybridResult.growthAudit.skippedRows.length - 8} more</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             {hybridResult.skippedNotes.length > 0 && (
               <p className="text-xs text-gray-500">
                 Observation notes kept out of inventory: {hybridResult.skippedNotes.slice(0, 3).join(' · ')}

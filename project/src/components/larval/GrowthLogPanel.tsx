@@ -1,5 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Save } from 'lucide-react';
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { Card, CardHeader } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -8,6 +17,7 @@ import { SubstrateTypeField } from '../forms/SubstrateTypeField';
 import { parseSubstrateType, resolveSubstrateType } from '../../constants/substrate';
 import type { Beetle, GrowthEntry, GrowthStage } from '../../types';
 import { beetleLabel } from '../../types';
+import { beetleImportIdSortKey } from '../../utils/importGrowthSheet';
 
 interface GrowthLogPanelProps {
   beetles: Beetle[];
@@ -47,17 +57,33 @@ export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLog
     notes: '',
   });
 
-  const beetleOptions = beetles.map((b) => ({
-    value: b.id,
-    label: beetleLabel(beetles, b.id),
-  }));
+  const beetleOptions = [...beetles]
+    .sort((a, b) => {
+      const aKey = beetleImportIdSortKey(a.name);
+      const bKey = beetleImportIdSortKey(b.name);
+      if (aKey !== bKey) return aKey - bKey;
+      return a.name.localeCompare(b.name);
+    })
+    .map((b) => ({
+      value: b.id,
+      label: beetleLabel(beetles, b.id),
+    }));
 
   const beetleHistory = useMemo(
     () =>
       growthEntries
         .filter((entry) => entry.beetleId === selectedBeetleId)
-        .sort((a, b) => b.date.localeCompare(a.date)),
+        .sort((a, b) => a.date.localeCompare(b.date)),
     [growthEntries, selectedBeetleId]
+  );
+
+  const chartData = useMemo(
+    () =>
+      beetleHistory.map((entry) => ({
+        date: formatDisplayDate(entry.date),
+        weight: entry.weight,
+      })),
+    [beetleHistory]
   );
 
   const nextId = `GE-${String(growthEntries.length + 1).padStart(3, '0')}`;
@@ -108,20 +134,46 @@ export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLog
           <Card>
             <CardHeader title="Growth History" subtitle={beetleLabel(beetles, selectedBeetleId)} />
             {beetleHistory.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-gray-800">
-                      <th className="text-left py-2 text-gray-500 font-medium">Date</th>
-                      <th className="text-left py-2 text-gray-500 font-medium">Stage</th>
-                      <th className="text-right py-2 text-gray-500 font-medium">Weight</th>
-                      <th className="text-right py-2 text-gray-500 font-medium hidden sm:table-cell">Temp</th>
-                      <th className="text-right py-2 text-gray-500 font-medium hidden sm:table-cell">Humidity</th>
-                      <th className="text-left py-2 text-gray-500 font-medium hidden md:table-cell">Substrate</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {beetleHistory.map((entry) => (
+              <div className="space-y-4">
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} />
+                      <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} unit="g" />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#111827',
+                          border: '1px solid #1f2937',
+                          borderRadius: 8,
+                          fontSize: 12,
+                        }}
+                        formatter={(value: number) => [`${value}g`, 'Weight']}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="weight"
+                        stroke="#0ea5e9"
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: '#0ea5e9' }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-800">
+                        <th className="text-left py-2 text-gray-500 font-medium">Date</th>
+                        <th className="text-left py-2 text-gray-500 font-medium">Stage</th>
+                        <th className="text-right py-2 text-gray-500 font-medium">Weight</th>
+                        <th className="text-right py-2 text-gray-500 font-medium hidden sm:table-cell">Temp</th>
+                        <th className="text-right py-2 text-gray-500 font-medium hidden sm:table-cell">Humidity</th>
+                        <th className="text-left py-2 text-gray-500 font-medium hidden md:table-cell">Substrate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...beetleHistory].reverse().map((entry) => (
                       <tr key={entry.id} className="border-b border-gray-800/50">
                         <td className="py-2 text-gray-400">{formatDisplayDate(entry.date)}</td>
                         <td className="py-2">
@@ -141,6 +193,7 @@ export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLog
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             ) : (
               <p className="text-sm text-gray-500">No growth entries yet for this beetle.</p>

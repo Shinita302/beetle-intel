@@ -33,6 +33,14 @@ import {
 import {
   looksLikePopulationGroupHeader,
 } from './importPopulationHeaderDetection';
+import {
+  importGrowthEntriesFromSheets,
+  isGrowthTrackingSheet,
+  type GrowthImportAudit,
+} from './importGrowthSheet';
+
+export { isGrowthTrackingSheet, importGrowthEntriesFromSheets } from './importGrowthSheet';
+export type { GrowthImportAudit, GrowthImportSkippedRow } from './importGrowthSheet';
 
 interface DraftInventoryCounts {
   eggs: number;
@@ -154,6 +162,7 @@ export interface StructuredImportBuild {
   stageRecords: GeneratedStageRecord[];
   validationWarnings: string[];
   summary: ImportSummary;
+  growthAudit?: GrowthImportAudit;
 }
 
 export interface PopulationGroupPreview {
@@ -184,6 +193,7 @@ export interface ImportSummary {
   sheetsProcessed: string[];
   sheetsSkipped: string[];
   growthSheetsImported: string[];
+  growthAudit?: GrowthImportAudit;
 }
 
 export interface GeneratedStageRecord {
@@ -584,166 +594,7 @@ export function inferSpeciesFromSheetName(sheetName: string): string {
   return '';
 }
 
-interface GrowthSheetColumnMap {
-  date?: number;
-  weight?: number;
-  stage?: number;
-  notes?: number;
-  species?: number;
-}
-
-function findGrowthHeaderRow(rows: RawSheetRow[]): RawSheetRow | null {
-  for (const row of rows) {
-    if (isEmptyRow(row.cells)) continue;
-    if (detectGrowthSheetColumns(row.cells)) return row;
-  }
-  return null;
-}
-
-function detectGrowthSheetColumns(headerCells: string[]): GrowthSheetColumnMap | null {
-  const map: GrowthSheetColumnMap = {};
-  headerCells.forEach((cell, index) => {
-    const h = normalize(cell);
-    if (!h) return;
-    if (/^date|checked|measured|when/.test(h)) map.date = index;
-    if (/weight|mass|\(g\)|grams?/.test(h)) map.weight = index;
-    if (/^stage|instar|larva/.test(h) || /^l[123]$/.test(h)) map.stage = index;
-    if (/note|comment|substrate|remark/.test(h)) map.notes = index;
-    if (/species|beetle.?name|^name$/.test(h)) map.species = index;
-  });
-
-  if (map.weight === undefined) return null;
-  if (map.date !== undefined || map.stage !== undefined) return map;
-  return null;
-}
-
-/** True when a worksheet looks like a dated weight log (not inventory counts). */
-export function isGrowthTrackingSheet(sheetName: string, rows: RawSheetRow[]): boolean {
-  const nonEmpty = rows.filter((row) => !isEmptyRow(row.cells));
-  if (nonEmpty.length === 0) return false;
-
-  const name = sheetName.trim().toLowerCase();
-  if (/inventory|stock|count|population|summary|readme|notes?$/i.test(name)) return false;
-
-  const hasGrowthColumns = Boolean(findGrowthHeaderRow(nonEmpty));
-  if (/growth|larval.?track|weight.?log|track.?log|measurement/i.test(name) && hasGrowthColumns) {
-    return true;
-  }
-  if (/^dhh$|hercules.?growth|larval.?growth/i.test(name) && hasGrowthColumns) {
-    return true;
-  }
-
-  return hasGrowthColumns;
-}
-
-function growthStageFromCell(raw: string): GrowthStage {
-  const detected = detectDevelopmentalStage(raw);
-  if (detected?.instar) return detected.instar;
-  if (detected?.label === 'Pupa') return 'Pupa';
-  if (detected?.label === 'Egg') return 'Egg';
-  if (/\bl1\b/i.test(raw)) return 'L1';
-  if (/\bl2\b/i.test(raw)) return 'L2';
-  if (/\bl3\b/i.test(raw)) return 'L3';
-  return 'L1';
-}
-
-function resolveBeetleForGrowthImport(
-  species: string,
-  pendingBeetles: Beetle[],
-  existingBeetles: Beetle[],
-  now: string
-): { beetle: Beetle; created: boolean } {
-  const key = species.trim().toLowerCase();
-  const pool = [...existingBeetles, ...pendingBeetles];
-
-  const match = pool.find((b) => {
-    const sp = b.species.toLowerCase();
-    const nm = b.name.toLowerCase();
-    return sp === key || sp.includes(key) || key.includes(sp) || nm === key;
-  });
-
-  if (match) return { beetle: match, created: false };
-
-  const beetle: Beetle = {
-    id: nextBeetleId(existingBeetles.length, pendingBeetles.length),
-    name: species.split(/\s+/).slice(-1)[0] || species,
-    species,
-    sex: 'unknown',
-    status: 'larva',
-    generation: '',
-    notes: 'Auto-created from growth worksheet import',
-    source: 'growth-sheet-import',
-    bloodline: '',
-    createdAt: now,
-  };
-  pendingBeetles.push(beetle);
-  return { beetle, created: true };
-}
-
-/** Import dated weight rows from growth worksheets (multi-tab workbooks). */
-export function importGrowthEntriesFromSheets(
-  sheets: { name: string; rows: RawSheetRow[] }[],
-  existingBeetles: Beetle[],
-  existingGrowthEntries: GrowthEntry[]
-): { growthEntries: GrowthEntry[]; newBeetles: Beetle[] } {
-  const growthEntries: GrowthEntry[] = [];
-  const newBeetles: Beetle[] = [];
-  const now = new Date().toISOString().slice(0, 10);
-  let entryIndex = existingGrowthEntries.length;
-
-  for (const sheet of sheets) {
-    const nonEmpty = sheet.rows.filter((row) => !isEmptyRow(row.cells));
-    const headerRow = findGrowthHeaderRow(nonEmpty);
-    if (!headerRow) continue;
-
-    const columns = detectGrowthSheetColumns(headerRow.cells);
-    if (!columns || columns.weight === undefined) continue;
-
-    const defaultSpecies =
-      inferSpeciesFromSheetName(sheet.name) ||
-      inferSpeciesFromText(sheet.name) ||
-      sheet.name.trim();
-
-    const dataRows = nonEmpty.filter((row) => row.source_row > headerRow.source_row);
-
-    for (const row of dataRows) {
-      const cells = row.cells;
-      const weightRaw = columns.weight !== undefined ? cells[columns.weight] ?? '' : '';
-      let weight = parseNumeric(weightRaw);
-      if (weight <= 0 && weightRaw) {
-        const gramMatch = weightRaw.match(/(\d+(?:\.\d+)?)\s*(?:g|gram)/i);
-        if (gramMatch) weight = parseFloat(gramMatch[1]);
-      }
-      if (weight <= 0) continue;
-
-      const dateRaw = columns.date !== undefined ? cells[columns.date] ?? '' : '';
-      const date = dateRaw ? parseDateLoose(dateRaw) : now;
-      const stageRaw = columns.stage !== undefined ? cells[columns.stage] ?? '' : '';
-      const speciesRaw =
-        columns.species !== undefined ? cells[columns.species] ?? '' : defaultSpecies;
-      const species = speciesRaw.trim() || defaultSpecies;
-      const notes = columns.notes !== undefined ? cells[columns.notes]?.trim() ?? '' : '';
-
-      const { beetle } = resolveBeetleForGrowthImport(species, newBeetles, existingBeetles, now);
-
-      entryIndex += 1;
-      growthEntries.push({
-        id: `GE-${String(entryIndex).padStart(3, '0')}`,
-        beetleId: beetle.id,
-        date,
-        stage: stageRaw ? growthStageFromCell(stageRaw) : 'L1',
-        weight: weight,
-        temperature: 0,
-        humidity: 0,
-        substrate: '',
-        notes: notes || `Imported from sheet "${sheet.name}"`,
-        createdAt: date,
-      });
-    }
-  }
-
-  return { growthEntries, newBeetles };
-}
+/** Import dated weight rows — see importGrowthSheet.ts */
 
 export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
   const lower = file.name.toLowerCase();
@@ -1703,6 +1554,7 @@ export function generateRecordsFromConfirmed(params: {
 
   flushInventoryGroupDraft();
 
+  let growthAudit: GrowthImportAudit | undefined;
   if (growthSheets.length > 0) {
     const sheetImport = importGrowthEntriesFromSheets(
       growthSheets,
@@ -1711,6 +1563,15 @@ export function generateRecordsFromConfirmed(params: {
     );
     beetles.push(...sheetImport.newBeetles);
     growthEntries.push(...sheetImport.growthEntries);
+    growthAudit = sheetImport.audit;
+    if (growthAudit.warnings.length > 0) {
+      validationWarnings.push(...growthAudit.warnings);
+    }
+    if (growthAudit.skippedRows.length > 0) {
+      validationWarnings.push(
+        `Growth import skipped ${growthAudit.skippedRows.length} row(s) — see growth audit for details`
+      );
+    }
   }
 
   const speciesInventory = Array.from(speciesInventoryMap.values());
@@ -1743,7 +1604,9 @@ export function generateRecordsFromConfirmed(params: {
       sheetsProcessed,
       sheetsSkipped,
       growthSheetsImported: growthSheets.map((s) => s.name),
+      growthAudit,
     },
+    growthAudit,
   };
 }
 
