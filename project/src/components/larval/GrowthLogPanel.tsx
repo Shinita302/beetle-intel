@@ -140,7 +140,10 @@ export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLog
                     <LineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                       <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} />
-                      <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} unit="g" />
+                      <YAxis
+                        tick={{ fill: '#6b7280', fontSize: 11 }}
+                        tickFormatter={(value) => `${value}g`}
+                      />
                       <Tooltip
                         contentStyle={{
                           backgroundColor: '#111827',
@@ -148,7 +151,7 @@ export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLog
                           borderRadius: 8,
                           fontSize: 12,
                         }}
-                        formatter={(value: number) => [`${value}g`, 'Weight']}
+                        formatter={(value) => [`${value ?? ''}g`, 'Weight']}
                       />
                       <Line
                         type="monotone"

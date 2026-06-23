@@ -1,24 +1,9 @@
 import type { Beetle, GrowthEntry, GrowthStage } from '@/types';
+import type { GrowthImportAudit } from '@/types/growthImport';
+import type { RawSheetRow } from '@/types/rawSheetRow';
 import { safeCellText } from './importFieldParsing';
-import type { RawSheetRow } from './importSpreadsheet';
 
-export interface GrowthImportSkippedRow {
-  sourceRow: number;
-  sourceSheet?: string;
-  reason: string;
-  rawText?: string;
-}
-
-export interface GrowthImportAudit {
-  sheetsProcessed: string[];
-  expectedBeetleIds: string[];
-  importedBeetleIds: string[];
-  missingBeetleIds: string[];
-  excelGrowthRecordCount: number;
-  importedGrowthRecordCount: number;
-  skippedRows: GrowthImportSkippedRow[];
-  warnings: string[];
-}
+export type { GrowthImportAudit, GrowthImportSkippedRow } from '@/types/growthImport';
 
 export interface GrowthSheetImportResult {
   growthEntries: GrowthEntry[];

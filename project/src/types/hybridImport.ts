@@ -1,5 +1,5 @@
 import type { InterpretedRow } from '@/utils/importSpreadsheet';
-import type { GrowthImportAudit } from '@/utils/importGrowthSheet';
+import type { GrowthImportAudit } from '@/types/growthImport';
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low';
 export type ImportParseSource = 'deterministic' | 'llm' | 'user-edited';

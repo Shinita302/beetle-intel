@@ -36,11 +36,13 @@ import {
 import {
   importGrowthEntriesFromSheets,
   isGrowthTrackingSheet,
-  type GrowthImportAudit,
 } from './importGrowthSheet';
+import type { GrowthImportAudit } from '@/types/growthImport';
+import type { RawSheetRow } from '@/types/rawSheetRow';
 
+export type { RawSheetRow } from '@/types/rawSheetRow';
 export { isGrowthTrackingSheet, importGrowthEntriesFromSheets } from './importGrowthSheet';
-export type { GrowthImportAudit, GrowthImportSkippedRow } from './importGrowthSheet';
+export type { GrowthImportAudit, GrowthImportSkippedRow } from '@/types/growthImport';
 
 interface DraftInventoryCounts {
   eggs: number;
@@ -104,13 +106,6 @@ export type RowMeaning =
   | 'note'
   | 'empty'
   | 'uncertain';
-
-export interface RawSheetRow {
-  source_row: number;
-  source_sheet?: string;
-  cells: string[];
-  raw_text: string;
-}
 
 export interface ParsedSpreadsheet {
   headers: string[];

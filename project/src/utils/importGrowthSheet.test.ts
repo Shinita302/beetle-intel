@@ -12,7 +12,7 @@ import {
   normalizeBeetleImportId,
   remapGrowthEntriesToSavedBeetles,
 } from './importGrowthSheet';
-import type { RawSheetRow } from './importSpreadsheet';
+import type { RawSheetRow } from '@/types/rawSheetRow';
 
 function sheetRows(fixture: { name: string; rows: string[][] }): RawSheetRow[] {
   return fixture.rows.map((cells, i) => ({
