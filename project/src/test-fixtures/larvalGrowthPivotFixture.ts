@@ -1,3 +1,17 @@
+/** Tracking Note Jun 2025 — real Larval Growth tab layout. */
+export const TRACKING_NOTE_JUN_2025_GROWTH = {
+  name: 'Larval Growth',
+  rows: [
+    ['DHH(L3)(TG)', '45933', 'Weight(g)', 'Headwidth(mm)', '14/06/2025'],
+    ['M', 'B-1', '80', '', '87'],
+    ['M', 'B-2', '78', '', '84'],
+    ['F', 'B-3', '65', '', '70'],
+    ['M', 'B-34', '82', '', '89'],
+    ['', 'B-35'],
+    ['', 'B-36'],
+  ],
+};
+
 /** Breeder layout: larva ID per row, measurement dates as column headers. */
 export const LARVAL_GROWTH_WIDE_SHEET = {
   name: 'Larval Growth',

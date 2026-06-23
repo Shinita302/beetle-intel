@@ -5,15 +5,21 @@ import {
   LARVAL_GROWTH_PARTIAL_PIVOT,
   LARVAL_GROWTH_PIVOT_SHEET,
   LARVAL_GROWTH_WIDE_SHEET,
+  TRACKING_NOTE_JUN_2025_GROWTH,
 } from '@/test-fixtures/larvalGrowthPivotFixture';
 import {
   beetleImportIdSortKey,
+  beetlesWithGrowthData,
+  detectBreederLarvaGrowthLayout,
   detectWideLarvaGrowthLayout,
   importGrowthEntriesFromSheets,
   isGrowthTrackingSheet,
   normalizeBeetleImportId,
   parseDateLoose,
+  parseExcelSerialDate,
+  parseFlexibleDate,
   remapGrowthEntriesToSavedBeetles,
+  repairGrowthEntryBeetleIds,
 } from './importGrowthSheet';
 import type { RawSheetRow } from '@/types/rawSheetRow';
 
@@ -34,10 +40,46 @@ describe('normalizeBeetleImportId', () => {
   });
 });
 
-describe('parseDateLoose', () => {
+describe('parseFlexibleDate', () => {
   it('parses UK day-first dates from breeder sheets', () => {
     expect(parseDateLoose('10/03/2025')).toBe('2025-03-10');
     expect(parseDateLoose('14/06/2025')).toBe('2025-06-14');
+  });
+
+  it('parses excel serial dates from Tracking Note Jun 2025', () => {
+    expect(parseExcelSerialDate('45933')).toBe('2025-10-03');
+    expect(parseFlexibleDate('45933')).toBe('2025-10-03');
+    expect(parseFlexibleDate('14/06/2025')).toBe('2025-06-14');
+  });
+});
+
+describe('detectBreederLarvaGrowthLayout', () => {
+  it('detects Tracking Note Jun 2025 Larval Growth matrix', () => {
+    const rows = sheetRows(TRACKING_NOTE_JUN_2025_GROWTH);
+    expect(detectBreederLarvaGrowthLayout(rows)).not.toBeNull();
+    expect(detectWideLarvaGrowthLayout(rows)).toBeNull();
+    expect(isGrowthTrackingSheet('Larval Growth', rows)).toBe(true);
+  });
+});
+
+describe('importGrowthEntriesFromSheets — Tracking Note Jun 2025', () => {
+  it('imports B-1 with two weights and skips blank B-35+', () => {
+    const result = importGrowthEntriesFromSheets(
+      [{ name: TRACKING_NOTE_JUN_2025_GROWTH.name, rows: sheetRows(TRACKING_NOTE_JUN_2025_GROWTH) }],
+      [],
+      []
+    );
+
+    expect(result.newBeetles.map((b) => b.name)).toContain('B-1');
+    expect(result.newBeetles.some((b) => b.name === 'B-35')).toBe(false);
+
+    const b1 = result.growthEntries.filter((e) => e.beetleId === 'B-1');
+    expect(b1).toHaveLength(2);
+    expect(b1.map((e) => e.weight).sort()).toEqual([80, 87]);
+    expect(b1.map((e) => e.date).sort()).toEqual(['2025-06-14', '2025-10-03']);
+
+    expect(result.audit.importedBeetleIds).toEqual(['B-1', 'B-2', 'B-3', 'B-34']);
+    expect(result.audit.missingBeetleIds).toEqual(['B-35', 'B-36']);
   });
 });
 
@@ -169,5 +211,87 @@ describe('remapGrowthEntriesToSavedBeetles', () => {
     ]);
 
     expect(remapped[0].beetleId).toBe('uuid-abc-123');
+  });
+
+  it('remaps by larva name when Supabase row order differs from import order', () => {
+    const imported: Beetle[] = [
+      {
+        id: 'B-2',
+        name: 'B-2',
+        species: 'Dynastes Hercules Hercules',
+        sex: 'unknown',
+        status: 'larva',
+        generation: '',
+        notes: '',
+        source: 'growth-sheet-import',
+        bloodline: '',
+        createdAt: '2025-06-01',
+      },
+      {
+        id: 'B-1',
+        name: 'B-1',
+        species: 'Dynastes Hercules Hercules',
+        sex: 'unknown',
+        status: 'larva',
+        generation: '',
+        notes: '',
+        source: 'growth-sheet-import',
+        bloodline: '',
+        createdAt: '2025-06-01',
+      },
+    ];
+    const saved: Beetle[] = [
+      { ...imported[1], id: 'uuid-b1' },
+      { ...imported[0], id: 'uuid-b2' },
+    ];
+    const remapped = remapGrowthEntriesToSavedBeetles(imported, saved, [
+      {
+        id: 'GE-001',
+        beetleId: 'B-1',
+        date: '2025-03-10',
+        stage: 'L3',
+        weight: 10,
+        temperature: 0,
+        humidity: 0,
+        substrate: '',
+        notes: '',
+        createdAt: '2025-03-10',
+      },
+    ]);
+
+    expect(remapped[0].beetleId).toBe('uuid-b1');
+  });
+
+  it('repairs orphaned B-1 growth entry ids to beetle UUIDs', () => {
+    const beetles: Beetle[] = [
+      {
+        id: 'uuid-b1',
+        name: 'B-1',
+        species: 'Dynastes Hercules Hercules',
+        sex: 'unknown',
+        status: 'larva',
+        generation: '',
+        notes: '',
+        source: 'growth-sheet-import',
+        bloodline: '',
+        createdAt: '2025-06-01',
+      },
+    ];
+    const repaired = repairGrowthEntryBeetleIds(beetles, [
+      {
+        id: 'GE-001',
+        beetleId: 'B-1',
+        date: '2025-03-10',
+        stage: 'L3',
+        weight: 10,
+        temperature: 0,
+        humidity: 0,
+        substrate: '',
+        notes: '',
+        createdAt: '2025-03-10',
+      },
+    ]);
+    expect(repaired[0].beetleId).toBe('uuid-b1');
+    expect(beetlesWithGrowthData(beetles, repaired)).toHaveLength(1);
   });
 });

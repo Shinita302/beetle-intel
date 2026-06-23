@@ -20,7 +20,7 @@ import {
   normalizePairings,
   normalizeSpeciesInventory,
 } from '@/utils/migrateLegacyData';
-import { remapGrowthEntriesToSavedBeetles } from '@/utils/importGrowthSheet';
+import { remapGrowthEntriesToSavedBeetles, repairGrowthEntryBeetleIds } from '@/utils/importGrowthSheet';
 import {
   mockBeetles,
   mockGrowthEntries,
@@ -153,6 +153,13 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
+  useEffect(() => {
+    if (beetles.length === 0 || growthEntries.length === 0) return;
+    const repaired = repairGrowthEntryBeetleIds(beetles, growthEntries);
+    const changed = repaired.some((entry, index) => entry.beetleId !== growthEntries[index]?.beetleId);
+    if (changed) setGrowthEntries(repaired);
+  }, [beetles, growthEntries, setGrowthEntries]);
+
   const run = useCallback(async (fn: () => Promise<void>) => {
     setDataError('');
     setBusy(true);
@@ -199,10 +206,11 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
       await run(async () => {
         const supabase = createClient();
         let growthEntriesToStore = payload.growthEntries;
+        let savedBeetles: Beetle[] = [];
 
         if (payload.beetles.length > 0) {
           const rows = await insertBeetlesForUser(supabase, userId, payload.beetles);
-          const savedBeetles = dbBeetlesToBeetles(rows);
+          savedBeetles = dbBeetlesToBeetles(rows);
           setBeetles((prev) => [...savedBeetles, ...prev]);
           if (growthEntriesToStore.length > 0) {
             growthEntriesToStore = remapGrowthEntriesToSavedBeetles(
@@ -213,16 +221,23 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
           }
         }
 
+        const beetlesForLinking = savedBeetles.length > 0 ? [...savedBeetles, ...beetles] : beetles;
+
         if (growthEntriesToStore.length > 0) {
-          setGrowthEntries((prev) => [...growthEntriesToStore, ...prev]);
+          const linkedNew = repairGrowthEntryBeetleIds(beetlesForLinking, growthEntriesToStore);
+          setGrowthEntries((prev) => {
+            const merged = [...linkedNew, ...prev];
+            return repairGrowthEntryBeetleIds(beetlesForLinking, merged);
+          });
         }
+
         if (payload.speciesInventory && payload.speciesInventory.length > 0) {
           setSpeciesInventory((prev) => mergeSpeciesInventory(prev, payload.speciesInventory!));
         }
         router.push('/dashboard');
       });
     },
-    [run, userId, setGrowthEntries, setSpeciesInventory, router]
+    [run, userId, beetles, setGrowthEntries, setSpeciesInventory, router]
   );
 
   const clearAllData = useCallback(async () => {

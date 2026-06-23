@@ -17,7 +17,7 @@ import { SubstrateTypeField } from '../forms/SubstrateTypeField';
 import { parseSubstrateType, resolveSubstrateType } from '../../constants/substrate';
 import type { Beetle, GrowthEntry, GrowthStage } from '../../types';
 import { beetleLabel } from '../../types';
-import { beetleImportIdSortKey } from '../../utils/importGrowthSheet';
+import { beetleImportIdSortKey, beetlesWithGrowthData, growthEntriesForBeetle } from '../../utils/importGrowthSheet';
 
 interface GrowthLogPanelProps {
   beetles: Beetle[];
@@ -57,10 +57,15 @@ export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLog
     notes: '',
   });
 
-  const beetlesWithGrowth = useMemo(() => {
-    const ids = new Set(growthEntries.map((entry) => entry.beetleId));
-    return beetles.filter((beetle) => ids.has(beetle.id));
-  }, [beetles, growthEntries]);
+  const beetlesWithGrowth = useMemo(
+    () => beetlesWithGrowthData(beetles, growthEntries),
+    [beetles, growthEntries]
+  );
+
+  const selectedBeetle = useMemo(
+    () => beetles.find((beetle) => beetle.id === selectedBeetleId) ?? null,
+    [beetles, selectedBeetleId]
+  );
 
   const beetleOptions = [...beetlesWithGrowth]
     .sort((a, b) => {
@@ -74,13 +79,12 @@ export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLog
       label: beetleLabel(beetles, b.id),
     }));
 
-  const beetleHistory = useMemo(
-    () =>
-      growthEntries
-        .filter((entry) => entry.beetleId === selectedBeetleId)
-        .sort((a, b) => a.date.localeCompare(b.date)),
-    [growthEntries, selectedBeetleId]
-  );
+  const beetleHistory = useMemo(() => {
+    if (!selectedBeetle) return [];
+    return growthEntriesForBeetle(selectedBeetle, growthEntries).sort((a, b) =>
+      a.date.localeCompare(b.date)
+    );
+  }, [growthEntries, selectedBeetle]);
 
   const chartData = useMemo(
     () =>
@@ -132,6 +136,13 @@ export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLog
             placeholder="Select beetle…"
           />
         </FormField>
+        {beetleOptions.length === 0 && (
+          <p className="text-sm text-gray-500 mt-3">
+            No larvae with growth data yet. Import your spreadsheet (Larval Growth tab) from{' '}
+            <span className="text-gray-400">Import</span>, or add a growth entry manually after
+            selecting a beetle profile.
+          </p>
+        )}
       </Card>
 
       {selectedBeetleId && (

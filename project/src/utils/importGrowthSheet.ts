@@ -34,6 +34,20 @@ interface PivotGrowthLayout {
   beetleColumns: Array<{ index: number; beetleId: string }>;
 }
 
+/**
+ * Tracking Note Jun 2025 “Larval Growth” tab:
+ * Sex | B-ID | Weight@date1 | Headwidth | Weight@date2
+ * Header: DHH(L3)(TG) | 45933 (excel date) | Weight(g) | Headwidth(mm) | 14/06/2025
+ */
+interface BreederLarvaGrowthLayout {
+  headerRow: RawSheetRow;
+  beetleIdColumnIndex: number;
+  sexColumnIndex?: number;
+  batchLabel: string;
+  stageLabel: GrowthStage;
+  measurementColumns: Array<{ date: string; weightIndex: number; header: string }>;
+}
+
 const EMPTY_AUDIT = (): GrowthImportAudit => ({
   sheetsProcessed: [],
   expectedBeetleIds: [],
@@ -100,10 +114,71 @@ export function parseDateLoose(raw: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Excel serial date (e.g. 45933 → 2025-10-03) from breeder spreadsheets. */
+export function parseExcelSerialDate(value: string): string {
+  const n = Number(safeCellText(value));
+  if (!Number.isFinite(n) || n < 20000 || n > 60000) return '';
+  const utc = Date.UTC(1899, 11, 30) + Math.round(n) * 86400000;
+  return new Date(utc).toISOString().slice(0, 10);
+}
+
+export function parseFlexibleDate(raw: string): string {
+  const serial = parseExcelSerialDate(raw);
+  if (serial) return serial;
+  return parseDateLoose(raw);
+}
+
+function isMeasurementMetaCell(cell: string): boolean {
+  return /weight|headwidth|head\s*width|size|length|\(g\)|\(mm\)|grams?/i.test(safeCellText(cell));
+}
+
+function parseStageFromBatchLabel(label: string): GrowthStage {
+  const match = safeCellText(label).match(/\(\s*(L[123])\s*\)/i);
+  if (match) return match[1].toUpperCase() as GrowthStage;
+  return 'L3';
+}
+
+function inferSpeciesFromGrowthBatchLabel(label: string, sheetName: string): string {
+  const text = safeCellText(label);
+  if (/dhh/i.test(text)) return 'Dynastes Hercules Hercules';
+  if (/dynastes/i.test(text) && /hercules/i.test(text)) return 'Dynastes Hercules Hercules';
+  return inferSpeciesFromSheetName(sheetName) || sheetName.trim() || 'Unknown species';
+}
+
+function parseBreederGrowthHeaderMeasurements(
+  headerCells: string[]
+): Array<{ date: string; weightIndex: number; header: string }> {
+  const measurements: Array<{ date: string; weightIndex: number; header: string }> = [];
+  const usedWeightIndexes = new Set<number>();
+
+  for (let i = 0; i < headerCells.length; i++) {
+    const cell = headerCells[i];
+    const date = parseFlexibleDate(cell);
+    if (!date) continue;
+
+    const next = headerCells[i + 1] ?? '';
+    if (isMeasurementMetaCell(next) && /weight/i.test(next)) {
+      const weightIndex = i + 1;
+      if (!usedWeightIndexes.has(weightIndex)) {
+        measurements.push({ date, weightIndex, header: cell });
+        usedWeightIndexes.add(weightIndex);
+      }
+      continue;
+    }
+
+    if (!usedWeightIndexes.has(i)) {
+      measurements.push({ date, weightIndex: i, header: cell });
+      usedWeightIndexes.add(i);
+    }
+  }
+
+  return measurements;
+}
+
 function isDateHeaderCell(cell: string): boolean {
   const text = safeCellText(cell);
   if (!text || /^date$/i.test(text)) return false;
-  return Boolean(parseDateLoose(text));
+  return Boolean(parseFlexibleDate(text));
 }
 
 function growthStageFromCell(raw: string): GrowthStage {
@@ -175,6 +250,40 @@ function findBeetleIdColumnIndex(headerCells: string[], sampleDataRows: RawSheet
     }
   });
   return bestCount > 0 ? bestIndex : 0;
+}
+
+/** Tracking Note layout: Sex | B-ID | Weight | Headwidth | Weight with excel/text dates in header. */
+export function detectBreederLarvaGrowthLayout(rows: RawSheetRow[]): BreederLarvaGrowthLayout | null {
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (isEmptyRow(row.cells)) continue;
+
+    const headerCells = row.cells.map((c) => safeCellText(c));
+    const measurementColumns = parseBreederGrowthHeaderMeasurements(headerCells);
+    if (measurementColumns.length < 1) continue;
+    if (!headerCells.some((cell) => /weight/i.test(cell))) continue;
+
+    const sampleData = rows.slice(i + 1, i + 12).filter((r) => !isEmptyRow(r.cells));
+    const beetleIdColumnIndex = findBeetleIdColumnIndex(headerCells, sampleData);
+    const beetleIdRows = sampleData.filter((r) =>
+      looksLikeBeetleId(safeCellText(r.cells[beetleIdColumnIndex] ?? ''))
+    ).length;
+    if (beetleIdRows < 2) continue;
+
+    const sexColumnIndex =
+      sampleData.length > 0 && /^[mf]$/i.test(safeCellText(sampleData[0].cells[0] ?? '')) ? 0 : undefined;
+
+    return {
+      headerRow: row,
+      beetleIdColumnIndex,
+      sexColumnIndex,
+      batchLabel: headerCells[0] ?? '',
+      stageLabel: parseStageFromBatchLabel(headerCells[0] ?? ''),
+      measurementColumns,
+    };
+  }
+
+  return null;
 }
 
 /** Breeder layout: ID | 10/03/2025 | 14/06/2025 | … with B-1…B-N down rows. */
@@ -254,18 +363,19 @@ export function isGrowthTrackingSheet(sheetName: string, rows: RawSheetRow[]): b
   const name = sheetName.trim().toLowerCase();
   if (/inventory|stock|count|population|summary|readme/i.test(name)) return false;
 
+  const hasBreederFormat = Boolean(detectBreederLarvaGrowthLayout(nonEmpty));
   const hasWideFormat = Boolean(detectWideLarvaGrowthLayout(nonEmpty));
   const hasLongFormat = Boolean(findGrowthHeaderRow(nonEmpty));
   const hasPivotFormat = Boolean(detectPivotGrowthLayout(nonEmpty));
 
   if (/growth|larval.?track|weight.?log|track.?log|measurement|larval.?growth/i.test(name)) {
-    return hasWideFormat || hasLongFormat || hasPivotFormat;
+    return hasBreederFormat || hasWideFormat || hasLongFormat || hasPivotFormat;
   }
   if (/^dhh$|hercules.?growth/i.test(name)) {
-    return hasWideFormat || hasLongFormat || hasPivotFormat;
+    return hasBreederFormat || hasWideFormat || hasLongFormat || hasPivotFormat;
   }
 
-  return hasWideFormat || hasLongFormat || hasPivotFormat;
+  return hasBreederFormat || hasWideFormat || hasLongFormat || hasPivotFormat;
 }
 
 function resolveBeetleForGrowthImportById(
@@ -609,6 +719,98 @@ function importLongGrowthSheet(
   );
 }
 
+function importBreederLarvaGrowthSheet(
+  sheet: { name: string; rows: RawSheetRow[] },
+  layout: BreederLarvaGrowthLayout,
+  defaultSpecies: string,
+  pendingBeetles: Beetle[],
+  existingBeetles: Beetle[],
+  existingGrowthEntries: GrowthEntry[],
+  growthEntries: GrowthEntry[],
+  audit: GrowthImportAudit,
+  now: string
+): void {
+  const species =
+    inferSpeciesFromGrowthBatchLabel(layout.batchLabel, sheet.name) || defaultSpecies;
+  const dataRows = sheet.rows.filter(
+    (row) => row.source_row > layout.headerRow.source_row && !isEmptyRow(row.cells)
+  );
+  let entryIndex = existingGrowthEntries.length + growthEntries.length;
+  const importedIds = new Set<string>();
+
+  for (const row of dataRows) {
+    const cells = row.cells.map((c) => safeCellText(c));
+    const beetleIdRaw = cells[layout.beetleIdColumnIndex] ?? '';
+    if (!beetleIdRaw || !looksLikeBeetleId(beetleIdRaw)) {
+      if (cells.some(Boolean)) {
+        audit.skippedRows.push({
+          sourceRow: row.source_row,
+          sourceSheet: sheet.name,
+          reason: 'Row has no valid larva ID',
+          rawText: row.raw_text,
+        });
+      }
+      continue;
+    }
+
+    const normalizedId = normalizeBeetleImportId(beetleIdRaw);
+    audit.expectedBeetleIds.push(normalizedId);
+
+    const sexRaw =
+      layout.sexColumnIndex !== undefined ? cells[layout.sexColumnIndex] ?? '' : '';
+    const sexNote = /^m$/i.test(sexRaw) ? 'male' : /^f$/i.test(sexRaw) ? 'female' : '';
+
+    let larvaImported = 0;
+    for (const measurement of layout.measurementColumns) {
+      const weight = parseWeightGrams(cells[measurement.weightIndex] ?? '');
+      if (weight <= 0) continue;
+
+      audit.excelGrowthRecordCount += 1;
+      const { beetle } = resolveBeetleForGrowthImportById(
+        normalizedId,
+        species,
+        pendingBeetles,
+        existingBeetles,
+        now
+      );
+
+      if (sexNote && beetle.sex === 'unknown') {
+        beetle.sex = sexNote === 'male' ? 'male' : 'female';
+      }
+
+      entryIndex += 1;
+      growthEntries.push({
+        id: `GE-${String(entryIndex).padStart(3, '0')}`,
+        beetleId: beetle.id,
+        date: measurement.date,
+        stage: layout.stageLabel,
+        weight,
+        temperature: 0,
+        humidity: 0,
+        substrate: '',
+        notes: [
+          layout.batchLabel ? `Batch: ${layout.batchLabel}` : '',
+          sexNote ? `Sex: ${sexNote}` : '',
+          `Imported from sheet "${sheet.name}" (${measurement.header})`,
+        ]
+          .filter(Boolean)
+          .join('; '),
+        createdAt: measurement.date,
+      });
+      larvaImported += 1;
+      audit.importedGrowthRecordCount += 1;
+    }
+
+    if (larvaImported > 0) {
+      importedIds.add(normalizedId);
+    }
+  }
+
+  audit.importedBeetleIds.push(
+    ...[...importedIds].sort((a, b) => beetleImportIdSortKey(a) - beetleImportIdSortKey(b))
+  );
+}
+
 function pruneBeetlesWithoutGrowth(beetles: Beetle[], growthEntries: GrowthEntry[]): Beetle[] {
   const idsWithGrowth = new Set(
     growthEntries.map((entry) => normalizeBeetleImportId(entry.beetleId))
@@ -640,12 +842,25 @@ export function importGrowthEntriesFromSheets(
     const nonEmpty = sheet.rows.filter((row) => !isEmptyRow(row.cells));
     const defaultSpecies = inferSpeciesFromSheetName(sheet.name) || sheet.name.trim() || 'Unknown species';
 
-    const wideLayout = detectWideLarvaGrowthLayout(nonEmpty);
+    const breederLayout = detectBreederLarvaGrowthLayout(nonEmpty);
+    const wideLayout = breederLayout ? null : detectWideLarvaGrowthLayout(nonEmpty);
     const pivotLayout = detectPivotGrowthLayout(nonEmpty);
     const headerRow = findGrowthHeaderRow(nonEmpty);
     const longColumns = headerRow ? detectGrowthSheetColumns(headerRow.cells) : null;
 
-    if (wideLayout) {
+    if (breederLayout) {
+      importBreederLarvaGrowthSheet(
+        sheet,
+        breederLayout,
+        defaultSpecies,
+        newBeetles,
+        [...existingBeetles, ...newBeetles],
+        existingGrowthEntries,
+        growthEntries,
+        audit,
+        now
+      );
+    } else if (wideLayout) {
       importWideLarvaGrowthSheet(
         sheet,
         wideLayout,
@@ -685,7 +900,7 @@ export function importGrowthEntriesFromSheets(
       );
     } else {
       audit.warnings.push(
-        `Sheet "${sheet.name}": no recognizable growth layout (expected ID+date columns, Date+B-N pivot, or Date+Weight rows)`
+        `Sheet "${sheet.name}": no recognizable growth layout (expected breeder Sex|B-ID|Weight matrix, ID+date columns, Date+B-N pivot, or Date+Weight rows)`
       );
       sheetAudits.push(audit);
       continue;
@@ -721,9 +936,14 @@ export function remapGrowthEntriesToSavedBeetles(
 ): GrowthEntry[] {
   const idMap = new Map<string, string>();
 
-  for (let i = 0; i < importedBeetles.length; i++) {
-    const original = importedBeetles[i];
-    const saved = savedBeetles[i];
+  for (const original of importedBeetles) {
+    const saved =
+      savedBeetles.find((b) => b.name === original.name && b.species === original.species) ??
+      savedBeetles.find(
+        (b) => normalizeBeetleImportId(b.name) === normalizeBeetleImportId(original.name)
+      ) ??
+      savedBeetles.find((b) => b.name === original.name);
+
     if (!saved) continue;
     idMap.set(original.id, saved.id);
     if (original.name) {
@@ -736,4 +956,41 @@ export function remapGrowthEntriesToSavedBeetles(
     ...entry,
     beetleId: idMap.get(entry.beetleId) ?? idMap.get(normalizeBeetleImportId(entry.beetleId)) ?? entry.beetleId,
   }));
+}
+
+/** Link orphaned growth entries (B-1 temp ids) to saved beetle UUIDs by larva name. */
+export function repairGrowthEntryBeetleIds(beetles: Beetle[], growthEntries: GrowthEntry[]): GrowthEntry[] {
+  if (beetles.length === 0 || growthEntries.length === 0) return growthEntries;
+
+  const beetleById = new Map(beetles.map((beetle) => [beetle.id, beetle]));
+  const beetleByImportName = new Map(
+    beetles.map((beetle) => [normalizeBeetleImportId(beetle.name), beetle])
+  );
+
+  return growthEntries.map((entry) => {
+    if (beetleById.has(entry.beetleId)) return entry;
+    const linked = beetleByImportName.get(normalizeBeetleImportId(entry.beetleId));
+    if (!linked) return entry;
+    return { ...entry, beetleId: linked.id };
+  });
+}
+
+export function growthEntriesForBeetle(beetle: Beetle, growthEntries: GrowthEntry[]): GrowthEntry[] {
+  const beetleKey = normalizeBeetleImportId(beetle.name);
+  const idKey = normalizeBeetleImportId(beetle.id);
+  return growthEntries.filter((entry) => {
+    if (entry.beetleId === beetle.id) return true;
+    const entryKey = normalizeBeetleImportId(entry.beetleId);
+    return entryKey === beetleKey || entryKey === idKey;
+  });
+}
+
+export function beetlesWithGrowthData(beetles: Beetle[], growthEntries: GrowthEntry[]): Beetle[] {
+  const linkedIds = new Set<string>();
+  for (const beetle of beetles) {
+    if (growthEntriesForBeetle(beetle, growthEntries).length > 0) {
+      linkedIds.add(beetle.id);
+    }
+  }
+  return beetles.filter((beetle) => linkedIds.has(beetle.id));
 }
