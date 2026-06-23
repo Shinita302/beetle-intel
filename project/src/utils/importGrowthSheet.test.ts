@@ -4,12 +4,15 @@ import {
   LARVAL_GROWTH_LONG_SHEET,
   LARVAL_GROWTH_PARTIAL_PIVOT,
   LARVAL_GROWTH_PIVOT_SHEET,
+  LARVAL_GROWTH_WIDE_SHEET,
 } from '@/test-fixtures/larvalGrowthPivotFixture';
 import {
   beetleImportIdSortKey,
+  detectWideLarvaGrowthLayout,
   importGrowthEntriesFromSheets,
   isGrowthTrackingSheet,
   normalizeBeetleImportId,
+  parseDateLoose,
   remapGrowthEntriesToSavedBeetles,
 } from './importGrowthSheet';
 import type { RawSheetRow } from '@/types/rawSheetRow';
@@ -31,10 +34,48 @@ describe('normalizeBeetleImportId', () => {
   });
 });
 
+describe('parseDateLoose', () => {
+  it('parses UK day-first dates from breeder sheets', () => {
+    expect(parseDateLoose('10/03/2025')).toBe('2025-03-10');
+    expect(parseDateLoose('14/06/2025')).toBe('2025-06-14');
+  });
+});
+
 describe('isGrowthTrackingSheet', () => {
+  it('detects Larval Growth wide worksheets', () => {
+    const rows = sheetRows(LARVAL_GROWTH_WIDE_SHEET);
+    expect(isGrowthTrackingSheet('Larval Growth', rows)).toBe(true);
+    expect(detectWideLarvaGrowthLayout(rows)?.dateColumns).toHaveLength(2);
+  });
+
   it('detects Larval Growth pivot worksheets', () => {
     const rows = sheetRows(LARVAL_GROWTH_PIVOT_SHEET);
     expect(isGrowthTrackingSheet('Larval Growth', rows)).toBe(true);
+  });
+});
+
+describe('importGrowthEntriesFromSheets — wide layout (breeder sheet)', () => {
+  it('imports B-1 with both measurement dates and skips blank B-35+', () => {
+    const result = importGrowthEntriesFromSheets(
+      [{ name: LARVAL_GROWTH_WIDE_SHEET.name, rows: sheetRows(LARVAL_GROWTH_WIDE_SHEET) }],
+      [],
+      []
+    );
+
+    expect(result.newBeetles.map((b) => b.name).sort((a, b) => beetleImportIdSortKey(a) - beetleImportIdSortKey(b))).toEqual([
+      'B-1',
+      'B-2',
+      'B-3',
+    ]);
+    expect(result.newBeetles.some((b) => b.name === 'B-35')).toBe(false);
+
+    const b1Entries = result.growthEntries.filter((e) => e.beetleId === 'B-1');
+    expect(b1Entries).toHaveLength(2);
+    expect(b1Entries.map((e) => e.date).sort()).toEqual(['2025-03-10', '2025-06-14']);
+    expect(b1Entries.map((e) => e.weight).sort()).toEqual([10, 25]);
+
+    expect(result.audit.importedBeetleIds).toEqual(['B-1', 'B-2', 'B-3']);
+    expect(result.audit.missingBeetleIds).toEqual(['B-35', 'B-36']);
   });
 });
 

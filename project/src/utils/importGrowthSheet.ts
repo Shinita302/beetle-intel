@@ -20,6 +20,14 @@ interface GrowthSheetColumnMap {
   beetleId?: number;
 }
 
+/** Dates in columns, larva IDs in rows — breeder “Larval Growth” tab layout. */
+interface WideLarvaGrowthLayout {
+  headerRow: RawSheetRow;
+  beetleIdColumnIndex: number;
+  dateColumns: Array<{ index: number; date: string; header: string }>;
+}
+
+/** Dates in rows, larva IDs in columns — alternate pivot layout. */
 interface PivotGrowthLayout {
   headerRow: RawSheetRow;
   dateColumnIndex: number;
@@ -69,13 +77,33 @@ function parseWeightGrams(raw: string): number {
   return loose ? parseFloat(loose[1]) : 0;
 }
 
-function parseDateLoose(raw: string): string {
+/** Parse breeder date cells — ISO, DD/MM/YYYY, and natural language. */
+export function parseDateLoose(raw: string): string {
   const text = safeCellText(raw);
   if (!text) return '';
+  if (/^date$/i.test(text)) return '';
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+
+  const dmy = text.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
+  if (dmy) {
+    const day = parseInt(dmy[1], 10);
+    const month = parseInt(dmy[2], 10);
+    let year = parseInt(dmy[3], 10);
+    if (year < 100) year += 2000;
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+  }
+
   const d = new Date(text);
   if (Number.isNaN(d.getTime())) return '';
   return d.toISOString().slice(0, 10);
+}
+
+function isDateHeaderCell(cell: string): boolean {
+  const text = safeCellText(cell);
+  if (!text || /^date$/i.test(text)) return false;
+  return Boolean(parseDateLoose(text));
 }
 
 function growthStageFromCell(raw: string): GrowthStage {
@@ -125,6 +153,67 @@ function findGrowthHeaderRow(rows: RawSheetRow[]): RawSheetRow | null {
   return null;
 }
 
+function findBeetleIdColumnIndex(headerCells: string[], sampleDataRows: RawSheetRow[]): number {
+  const labeled = headerCells.findIndex((c) => /^id$|beetle.?id|larva.?id/i.test(safeCellText(c)));
+  if (labeled >= 0) return labeled;
+
+  const counts = new Map<number, number>();
+  for (const row of sampleDataRows) {
+    row.cells.forEach((cell, index) => {
+      if (looksLikeBeetleId(cell)) {
+        counts.set(index, (counts.get(index) ?? 0) + 1);
+      }
+    });
+  }
+
+  let bestIndex = 0;
+  let bestCount = 0;
+  counts.forEach((count, index) => {
+    if (count > bestCount) {
+      bestCount = count;
+      bestIndex = index;
+    }
+  });
+  return bestCount > 0 ? bestIndex : 0;
+}
+
+/** Breeder layout: ID | 10/03/2025 | 14/06/2025 | … with B-1…B-N down rows. */
+export function detectWideLarvaGrowthLayout(rows: RawSheetRow[]): WideLarvaGrowthLayout | null {
+  let best: WideLarvaGrowthLayout | null = null;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (isEmptyRow(row.cells)) continue;
+
+    const headerCells = row.cells.map((c) => safeCellText(c));
+    const dateColumns = headerCells
+      .map((cell, index) => ({ cell, index }))
+      .filter(({ cell }) => isDateHeaderCell(cell))
+      .map(({ cell, index }) => ({
+        index,
+        date: parseDateLoose(cell),
+        header: cell,
+      }))
+      .filter((col) => Boolean(col.date));
+
+    if (dateColumns.length < 1) continue;
+
+    const sampleData = rows.slice(i + 1, i + 8).filter((r) => !isEmptyRow(r.cells));
+    const beetleIdColumnIndex = findBeetleIdColumnIndex(headerCells, sampleData);
+    const beetleIdRows = sampleData.filter((r) =>
+      looksLikeBeetleId(safeCellText(r.cells[beetleIdColumnIndex] ?? ''))
+    ).length;
+
+    if (beetleIdRows < 1) continue;
+
+    if (!best || dateColumns.length > best.dateColumns.length || beetleIdRows > 5) {
+      best = { headerRow: row, beetleIdColumnIndex, dateColumns };
+    }
+  }
+
+  return best;
+}
+
 export function detectPivotGrowthLayout(rows: RawSheetRow[]): PivotGrowthLayout | null {
   let best: PivotGrowthLayout | null = null;
 
@@ -143,7 +232,9 @@ export function detectPivotGrowthLayout(rows: RawSheetRow[]): PivotGrowthLayout 
     if (dateHeaderIdx >= 0 && !looksLikeBeetleId(cells[dateHeaderIdx])) {
       dateColumnIndex = dateHeaderIdx;
     } else {
-      const firstNonBeetle = cells.findIndex((c, i) => c && !looksLikeBeetleId(c) && !beetleColumns.some((b) => b.index === i));
+      const firstNonBeetle = cells.findIndex(
+        (c, i) => c && !looksLikeBeetleId(c) && !beetleColumns.some((b) => b.index === i)
+      );
       dateColumnIndex = firstNonBeetle >= 0 ? firstNonBeetle : 0;
     }
 
@@ -155,7 +246,7 @@ export function detectPivotGrowthLayout(rows: RawSheetRow[]): PivotGrowthLayout 
   return best;
 }
 
-/** True when a worksheet looks like larval growth tracking (long or pivot layout). */
+/** True when a worksheet looks like larval growth tracking (wide, pivot, or long layout). */
 export function isGrowthTrackingSheet(sheetName: string, rows: RawSheetRow[]): boolean {
   const nonEmpty = rows.filter((row) => !isEmptyRow(row.cells));
   if (nonEmpty.length === 0) return false;
@@ -163,17 +254,18 @@ export function isGrowthTrackingSheet(sheetName: string, rows: RawSheetRow[]): b
   const name = sheetName.trim().toLowerCase();
   if (/inventory|stock|count|population|summary|readme/i.test(name)) return false;
 
+  const hasWideFormat = Boolean(detectWideLarvaGrowthLayout(nonEmpty));
   const hasLongFormat = Boolean(findGrowthHeaderRow(nonEmpty));
   const hasPivotFormat = Boolean(detectPivotGrowthLayout(nonEmpty));
 
   if (/growth|larval.?track|weight.?log|track.?log|measurement|larval.?growth/i.test(name)) {
-    return hasLongFormat || hasPivotFormat;
+    return hasWideFormat || hasLongFormat || hasPivotFormat;
   }
   if (/^dhh$|hercules.?growth/i.test(name)) {
-    return hasLongFormat || hasPivotFormat;
+    return hasWideFormat || hasLongFormat || hasPivotFormat;
   }
 
-  return hasLongFormat || hasPivotFormat;
+  return hasWideFormat || hasLongFormat || hasPivotFormat;
 }
 
 function resolveBeetleForGrowthImportById(
@@ -263,6 +355,82 @@ function mergeAudits(audits: GrowthImportAudit[]): GrowthImportAudit {
   return merged;
 }
 
+function importWideLarvaGrowthSheet(
+  sheet: { name: string; rows: RawSheetRow[] },
+  layout: WideLarvaGrowthLayout,
+  defaultSpecies: string,
+  pendingBeetles: Beetle[],
+  existingBeetles: Beetle[],
+  existingGrowthEntries: GrowthEntry[],
+  growthEntries: GrowthEntry[],
+  audit: GrowthImportAudit,
+  now: string
+): void {
+  const dataRows = sheet.rows.filter(
+    (row) => row.source_row > layout.headerRow.source_row && !isEmptyRow(row.cells)
+  );
+  let entryIndex = existingGrowthEntries.length + growthEntries.length;
+  const importedIds = new Set<string>();
+
+  for (const row of dataRows) {
+    const cells = row.cells.map((c) => safeCellText(c));
+    const beetleIdRaw = cells[layout.beetleIdColumnIndex] ?? '';
+    if (!beetleIdRaw || !looksLikeBeetleId(beetleIdRaw)) {
+      if (cells.some(Boolean)) {
+        audit.skippedRows.push({
+          sourceRow: row.source_row,
+          sourceSheet: sheet.name,
+          reason: 'Row has no valid larva ID',
+          rawText: row.raw_text,
+        });
+      }
+      continue;
+    }
+
+    const normalizedId = normalizeBeetleImportId(beetleIdRaw);
+    audit.expectedBeetleIds.push(normalizedId);
+
+    let larvaImported = 0;
+    for (const dateCol of layout.dateColumns) {
+      const weight = parseWeightGrams(cells[dateCol.index] ?? '');
+      if (weight <= 0) continue;
+
+      audit.excelGrowthRecordCount += 1;
+      const { beetle } = resolveBeetleForGrowthImportById(
+        normalizedId,
+        defaultSpecies,
+        pendingBeetles,
+        existingBeetles,
+        now
+      );
+
+      entryIndex += 1;
+      growthEntries.push({
+        id: `GE-${String(entryIndex).padStart(3, '0')}`,
+        beetleId: beetle.id,
+        date: dateCol.date,
+        stage: 'L1',
+        weight,
+        temperature: 0,
+        humidity: 0,
+        substrate: '',
+        notes: `Imported from sheet "${sheet.name}" (${dateCol.header})`,
+        createdAt: dateCol.date,
+      });
+      larvaImported += 1;
+      audit.importedGrowthRecordCount += 1;
+    }
+
+    if (larvaImported > 0) {
+      importedIds.add(normalizedId);
+    }
+  }
+
+  audit.importedBeetleIds.push(
+    ...[...importedIds].sort((a, b) => beetleImportIdSortKey(a) - beetleImportIdSortKey(b))
+  );
+}
+
 function importPivotGrowthSheet(
   sheet: { name: string; rows: RawSheetRow[] },
   layout: PivotGrowthLayout,
@@ -277,12 +445,11 @@ function importPivotGrowthSheet(
   const expectedIds = layout.beetleColumns.map((c) => c.beetleId);
   audit.expectedBeetleIds.push(...expectedIds);
 
-  for (const beetleId of expectedIds) {
-    resolveBeetleForGrowthImportById(beetleId, defaultSpecies, pendingBeetles, existingBeetles, now);
-  }
-
-  const dataRows = sheet.rows.filter((row) => row.source_row > layout.headerRow.source_row && !isEmptyRow(row.cells));
+  const dataRows = sheet.rows.filter(
+    (row) => row.source_row > layout.headerRow.source_row && !isEmptyRow(row.cells)
+  );
   let entryIndex = existingGrowthEntries.length + growthEntries.length;
+  const importedIds = new Set<string>();
 
   for (const row of dataRows) {
     const cells = row.cells.map((c) => safeCellText(c));
@@ -298,11 +465,19 @@ function importPivotGrowthSheet(
     }
 
     const date = parseDateLoose(dateRaw);
-    let rowImported = 0;
+    if (!date) {
+      audit.skippedRows.push({
+        sourceRow: row.source_row,
+        sourceSheet: sheet.name,
+        reason: 'Unparseable date on pivot growth row',
+        rawText: row.raw_text,
+      });
+      continue;
+    }
 
+    let rowImported = 0;
     for (const col of layout.beetleColumns) {
-      const weightRaw = cells[col.index] ?? '';
-      const weight = parseWeightGrams(weightRaw);
+      const weight = parseWeightGrams(cells[col.index] ?? '');
       if (weight <= 0) continue;
 
       audit.excelGrowthRecordCount += 1;
@@ -329,6 +504,7 @@ function importPivotGrowthSheet(
       });
       rowImported += 1;
       audit.importedGrowthRecordCount += 1;
+      importedIds.add(col.beetleId);
     }
 
     if (rowImported === 0) {
@@ -341,7 +517,9 @@ function importPivotGrowthSheet(
     }
   }
 
-  audit.importedBeetleIds.push(...expectedIds);
+  audit.importedBeetleIds.push(
+    ...[...importedIds].sort((a, b) => beetleImportIdSortKey(a) - beetleImportIdSortKey(b))
+  );
 }
 
 function importLongGrowthSheet(
@@ -357,9 +535,11 @@ function importLongGrowthSheet(
   now: string,
   nextTempId: () => string
 ): void {
-  const dataRows = sheet.rows.filter((row) => row.source_row > headerRow.source_row && !isEmptyRow(row.cells));
+  const dataRows = sheet.rows.filter(
+    (row) => row.source_row > headerRow.source_row && !isEmptyRow(row.cells)
+  );
   let entryIndex = existingGrowthEntries.length + growthEntries.length;
-  const seenBeetleIds = new Set<string>();
+  const importedIds = new Set<string>();
 
   for (const row of dataRows) {
     const cells = row.cells.map((c) => safeCellText(c));
@@ -389,7 +569,6 @@ function importLongGrowthSheet(
     let beetle: Beetle;
     if (beetleIdRaw && looksLikeBeetleId(beetleIdRaw)) {
       const normalizedId = normalizeBeetleImportId(beetleIdRaw);
-      seenBeetleIds.add(normalizedId);
       audit.expectedBeetleIds.push(normalizedId);
       beetle = resolveBeetleForGrowthImportById(
         beetleIdRaw,
@@ -398,6 +577,7 @@ function importLongGrowthSheet(
         existingBeetles,
         now
       ).beetle;
+      importedIds.add(normalizedId);
     } else {
       beetle = resolveBeetleForGrowthImportBySpecies(
         species,
@@ -424,10 +604,19 @@ function importLongGrowthSheet(
     audit.importedGrowthRecordCount += 1;
   }
 
-  audit.importedBeetleIds.push(...[...seenBeetleIds].sort((a, b) => beetleImportIdSortKey(a) - beetleImportIdSortKey(b)));
+  audit.importedBeetleIds.push(
+    ...[...importedIds].sort((a, b) => beetleImportIdSortKey(a) - beetleImportIdSortKey(b))
+  );
 }
 
-/** Import dated weight rows from growth worksheets (long format or pivot B-1…B-N columns). */
+function pruneBeetlesWithoutGrowth(beetles: Beetle[], growthEntries: GrowthEntry[]): Beetle[] {
+  const idsWithGrowth = new Set(
+    growthEntries.map((entry) => normalizeBeetleImportId(entry.beetleId))
+  );
+  return beetles.filter((beetle) => idsWithGrowth.has(normalizeBeetleImportId(beetle.id)));
+}
+
+/** Import dated weight rows from growth worksheets (wide, pivot, or long layout). */
 export function importGrowthEntriesFromSheets(
   sheets: { name: string; rows: RawSheetRow[] }[],
   existingBeetles: Beetle[],
@@ -451,11 +640,24 @@ export function importGrowthEntriesFromSheets(
     const nonEmpty = sheet.rows.filter((row) => !isEmptyRow(row.cells));
     const defaultSpecies = inferSpeciesFromSheetName(sheet.name) || sheet.name.trim() || 'Unknown species';
 
+    const wideLayout = detectWideLarvaGrowthLayout(nonEmpty);
     const pivotLayout = detectPivotGrowthLayout(nonEmpty);
     const headerRow = findGrowthHeaderRow(nonEmpty);
     const longColumns = headerRow ? detectGrowthSheetColumns(headerRow.cells) : null;
 
-    if (pivotLayout && (!longColumns || pivotLayout.beetleColumns.length >= 2)) {
+    if (wideLayout) {
+      importWideLarvaGrowthSheet(
+        sheet,
+        wideLayout,
+        defaultSpecies,
+        newBeetles,
+        [...existingBeetles, ...newBeetles],
+        existingGrowthEntries,
+        growthEntries,
+        audit,
+        now
+      );
+    } else if (pivotLayout && (!longColumns || pivotLayout.beetleColumns.length >= 2)) {
       importPivotGrowthSheet(
         sheet,
         pivotLayout,
@@ -482,7 +684,9 @@ export function importGrowthEntriesFromSheets(
         nextTempId
       );
     } else {
-      audit.warnings.push(`Sheet "${sheet.name}": no recognizable growth layout (expected Date+Weight or B-1…B-N pivot headers)`);
+      audit.warnings.push(
+        `Sheet "${sheet.name}": no recognizable growth layout (expected ID+date columns, Date+B-N pivot, or Date+Weight rows)`
+      );
       sheetAudits.push(audit);
       continue;
     }
@@ -496,13 +700,17 @@ export function importGrowthEntriesFromSheets(
   const audit = mergeAudits(sheetAudits);
   if (audit.missingBeetleIds.length > 0) {
     audit.warnings.push(
-      `Missing larva IDs from worksheet: ${audit.missingBeetleIds.slice(0, 12).join(', ')}${
+      `Larvae with no weight data: ${audit.missingBeetleIds.slice(0, 12).join(', ')}${
         audit.missingBeetleIds.length > 12 ? ` (+${audit.missingBeetleIds.length - 12} more)` : ''
       }`
     );
   }
 
-  return { growthEntries, newBeetles, audit };
+  return {
+    growthEntries,
+    newBeetles: pruneBeetlesWithoutGrowth(newBeetles, growthEntries),
+    audit,
+  };
 }
 
 /** Remap growth entry beetleIds after Supabase assigns new UUIDs to imported beetles. */

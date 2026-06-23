@@ -57,7 +57,12 @@ export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLog
     notes: '',
   });
 
-  const beetleOptions = [...beetles]
+  const beetlesWithGrowth = useMemo(() => {
+    const ids = new Set(growthEntries.map((entry) => entry.beetleId));
+    return beetles.filter((beetle) => ids.has(beetle.id));
+  }, [beetles, growthEntries]);
+
+  const beetleOptions = [...beetlesWithGrowth]
     .sort((a, b) => {
       const aKey = beetleImportIdSortKey(a.name);
       const bKey = beetleImportIdSortKey(b.name);

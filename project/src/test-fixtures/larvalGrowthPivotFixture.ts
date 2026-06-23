@@ -1,3 +1,16 @@
+/** Breeder layout: larva ID per row, measurement dates as column headers. */
+export const LARVAL_GROWTH_WIDE_SHEET = {
+  name: 'Larval Growth',
+  rows: [
+    ['ID', '10/03/2025', '14/06/2025'],
+    ['B-1', '10g', '25g'],
+    ['B-2', '12g', '28g'],
+    ['B-3', '11g', '26g'],
+    ['B-35', '', ''],
+    ['B-36', '', ''],
+  ],
+};
+
 /** Pivot larval growth layout: dates in rows, B-1…B-N as column headers. */
 export const LARVAL_GROWTH_PIVOT_SHEET = {
   name: 'Larval Growth',
