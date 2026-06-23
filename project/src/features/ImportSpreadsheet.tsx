@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   CheckCircle2,
@@ -49,7 +49,13 @@ function meaningBadgeVariant(meaning: RowMeaning): 'info' | 'warning' | 'neutral
   return 'neutral';
 }
 
+function isAcceptedSpreadsheet(file: File): boolean {
+  const lower = file.name.toLowerCase();
+  return lower.endsWith('.csv') || lower.endsWith('.xlsx');
+}
+
 export function ImportSpreadsheet({ beetles, growthEntries, userId, onImportConfirmed }: ImportSpreadsheetProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<ImportStep>('parse');
   const [fileName, setFileName] = useState('');
   const [parsedSheet, setParsedSheet] = useState<ParsedSpreadsheet | null>(null);
@@ -60,6 +66,7 @@ export function ImportSpreadsheet({ beetles, growthEntries, userId, onImportConf
   const [fileError, setFileError] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
 
   const includedGroups = useMemo(
     () => editableGroups.filter((group) => group.included),
@@ -105,6 +112,39 @@ export function ImportSpreadsheet({ beetles, growthEntries, userId, onImportConf
     }
   };
 
+  const handleDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(true);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const next = event.relatedTarget;
+    if (next instanceof Node && event.currentTarget.contains(next)) return;
+    setDragActive(false);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(false);
+
+    const file = event.dataTransfer.files?.[0] ?? null;
+    if (!file) return;
+    if (!isAcceptedSpreadsheet(file)) {
+      setFileError('Unsupported file type. Upload CSV or XLSX.');
+      return;
+    }
+    void handleFileChange(file);
+  };
+
   const handleConfirmImport = async () => {
     if (!confirmed || !parsedSheet) return;
     const hasPayload =
@@ -145,18 +185,39 @@ export function ImportSpreadsheet({ beetles, growthEntries, userId, onImportConf
           title="Upload"
           subtitle="Hybrid import: deterministic rules first, optional LLM for messy blocks"
         />
-        <label className="block">
-          <input
-            type="file"
-            accept=".csv,.xlsx"
-            className="hidden"
-            onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
-          />
-          <div className="border border-dashed border-gray-700 rounded-lg p-5 text-center cursor-pointer hover:border-sky-500/40 hover:bg-sky-500/5 transition-colors">
-            <Upload className="w-5 h-5 text-sky-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-300">Click to choose spreadsheet</p>
-          </div>
-        </label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,.xlsx"
+          className="hidden"
+          onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+        />
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
+          onDragEnter={handleDragEnter}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`border border-dashed rounded-lg p-5 text-center cursor-pointer transition-colors ${
+            dragActive
+              ? 'border-sky-400 bg-sky-500/10'
+              : 'border-gray-700 hover:border-sky-500/40 hover:bg-sky-500/5'
+          }`}
+        >
+          <Upload className="w-5 h-5 text-sky-400 mx-auto mb-2" />
+          <p className="text-sm text-gray-300">
+            {dragActive ? 'Drop spreadsheet here' : 'Click or drag spreadsheet here'}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">CSV or XLSX</p>
+        </div>
         {loading && <Badge variant="info" className="mt-3">Parsing blocks…</Badge>}
         {fileName && <Badge variant="success" className="mt-3">Loaded: {fileName}</Badge>}
         {fileError && <Badge variant="danger" className="mt-3">{fileError}</Badge>}
