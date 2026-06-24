@@ -4,8 +4,8 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { SubstrateTypeField } from '../forms/SubstrateTypeField';
 import { parseSubstrateType, resolveSubstrateType } from '../../constants/substrate';
-import type { PestPredictionResult } from '../../utils/pestPrediction';
-import type { OutbreakRiskLevel } from '../../types';
+import { PEST_RISK_LEVEL_LABEL, type PestPredictionResult } from '../../utils/pestPrediction';
+import type { PestRiskLevel } from '../../types';
 
 export interface PestPredictionFormState {
   substrateSelection: string;
@@ -23,18 +23,10 @@ interface PestPredictionPanelProps {
   loading?: boolean;
 }
 
-const levelVariant: Record<OutbreakRiskLevel, 'success' | 'warning' | 'danger' | 'info'> = {
+const levelVariant: Record<PestRiskLevel, 'success' | 'warning' | 'danger'> = {
   low: 'success',
   moderate: 'warning',
   high: 'danger',
-  critical: 'danger',
-};
-
-const levelLabel: Record<OutbreakRiskLevel, string> = {
-  low: 'Low Risk',
-  moderate: 'Moderate Risk',
-  high: 'High Risk',
-  critical: 'Critical Risk',
 };
 
 export function PestPredictionPanel({
@@ -89,7 +81,7 @@ export function PestPredictionPanel({
       <div className="flex flex-wrap items-center gap-3">
         <Button type="button" variant="primary" onClick={onRunPrediction} disabled={loading}>
           <Brain className="w-4 h-4" />
-          {loading ? 'Analyzing…' : 'Run Outbreak Prediction'}
+          {loading ? 'Analyzing…' : 'Assess Pest Risk'}
         </Button>
         <span className="text-[11px] text-gray-500">
           Uses placeholder logic until AI is connected
@@ -97,33 +89,32 @@ export function PestPredictionPanel({
       </div>
 
       {result && (
-        <div className="rounded-lg border border-gray-700/80 bg-gray-800/40 p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-400" />
-              <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                Prediction Result
-              </span>
-            </div>
-            <Badge variant={levelVariant[result.level]}>{levelLabel[result.level]}</Badge>
+        <div className="rounded-lg border border-gray-700/80 bg-gray-800/40 p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+              Risk Assessment
+            </span>
           </div>
 
-          <div className="flex items-end gap-3">
-            <div>
-              <p className="text-[10px] text-gray-500 uppercase mb-0.5">Outbreak likelihood</p>
-              <p className="text-3xl font-bold text-gray-100">{result.score}%</p>
-            </div>
-            <p className="text-sm text-gray-400 flex-1 pb-1">{result.summary}</p>
+          <div className="space-y-2">
+            <Badge variant={levelVariant[result.level]} className="text-sm px-3 py-1">
+              {PEST_RISK_LEVEL_LABEL[result.level]}
+            </Badge>
+            <p className="text-sm text-gray-300">{result.summary}</p>
           </div>
 
-          <ul className="space-y-1.5">
-            {result.factors.map((factor) => (
-              <li key={factor} className="text-xs text-gray-400 flex gap-2">
-                <span className="text-sky-500/80">•</span>
-                {factor}
-              </li>
-            ))}
-          </ul>
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase mb-2">Risk Factors</p>
+            <ul className="space-y-1.5">
+              {result.factors.map((factor) => (
+                <li key={factor} className="text-xs text-gray-400 flex gap-2">
+                  <span className="text-sky-500/80">•</span>
+                  {factor}
+                </li>
+              ))}
+            </ul>
+          </div>
 
           <p className="text-[10px] text-gray-600 font-mono border-t border-gray-800 pt-2">
             AI payload ready · {result.aiPayload.modelVersion}

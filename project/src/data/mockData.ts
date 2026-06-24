@@ -260,8 +260,7 @@ export const mockPestRisks: PestRisk[] = [
     temperature: 26,
     humidity: 78,
     foodType: 'Protein jelly',
-    outbreakScore: 62,
-    outbreakLevel: 'high',
+    riskLevel: 'high',
     predictionSummary: 'Several risk signals align. Inspect bottles and refresh substrate within 48h.',
   },
   {

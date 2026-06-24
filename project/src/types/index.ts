@@ -5,7 +5,7 @@ export type PestProblem = 'mites' | 'mold' | 'dryness' | 'over-wet' | 'smell' | 
 export type Severity = 'low' | 'medium' | 'high';
 export type PestStatus = 'open' | 'resolved';
 export type ContainerSizeUnit = 'cc' | 'mL' | 'L' | 'gallons';
-export type OutbreakRiskLevel = 'low' | 'moderate' | 'high' | 'critical';
+export type PestRiskLevel = 'low' | 'moderate' | 'high';
 
 /** Individual beetle profile — one beetle only. */
 export interface Beetle {
@@ -170,8 +170,7 @@ export interface PestRisk {
   temperature?: number;
   humidity?: number;
   foodType?: string;
-  outbreakScore?: number;
-  outbreakLevel?: OutbreakRiskLevel;
+  riskLevel?: PestRiskLevel;
   predictionSummary?: string;
 }
 

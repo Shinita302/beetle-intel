@@ -1,4 +1,4 @@
-import type { OutbreakRiskLevel, PestProblem } from '../types';
+import type { PestProblem, PestRiskLevel } from '../types';
 
 export interface PestPredictionInput {
   substrateType: string;
@@ -9,100 +9,142 @@ export interface PestPredictionInput {
 }
 
 export interface PestPredictionResult {
-  score: number;
-  level: OutbreakRiskLevel;
+  level: PestRiskLevel;
   summary: string;
   factors: string[];
   /** Shape ready to send to an AI API later */
   aiPayload: PestPredictionInput & { modelVersion: string };
 }
 
-function scoreToLevel(score: number): OutbreakRiskLevel {
-  if (score >= 75) return 'critical';
-  if (score >= 55) return 'high';
-  if (score >= 35) return 'moderate';
-  return 'low';
+export const PEST_RISK_LEVEL_LABEL: Record<PestRiskLevel, string> = {
+  low: 'Low Risk',
+  moderate: 'Moderate Risk',
+  high: 'High Risk',
+};
+
+type RiskSignalWeight = 'minor' | 'major';
+
+interface RiskSignal {
+  weight: RiskSignalWeight;
+  message: string;
 }
 
-/**
- * Placeholder heuristic until an AI model is connected.
- * Replace `predictPestOutbreak` implementation with API call when ready.
- */
-export function predictPestOutbreak(input: PestPredictionInput): PestPredictionResult {
-  const factors: string[] = [];
-  let score = 18;
-
+function collectRiskSignals(input: PestPredictionInput): RiskSignal[] {
+  const signals: RiskSignal[] = [];
   const substrate = input.substrateType.toLowerCase();
   const food = input.foodType.toLowerCase();
 
   if (input.humidity >= 82) {
-    score += 28;
-    factors.push('Very high humidity increases mold and mite risk.');
+    signals.push({
+      weight: 'major',
+      message: 'Very high humidity increases mold and mite risk.',
+    });
   } else if (input.humidity >= 70) {
-    score += 14;
-    factors.push('Elevated humidity may encourage mold growth.');
+    signals.push({
+      weight: 'minor',
+      message: 'Elevated humidity may encourage mold growth.',
+    });
   } else if (input.humidity > 0 && input.humidity < 45) {
-    score += 12;
-    factors.push('Low humidity can stress larvae and worsen dryness issues.');
+    signals.push({
+      weight: 'minor',
+      message: 'Low humidity can stress larvae and worsen dryness issues.',
+    });
   }
 
   if (input.temperature >= 30) {
-    score += 18;
-    factors.push('High temperature accelerates substrate decomposition and pests.');
+    signals.push({
+      weight: 'major',
+      message: 'High temperature accelerates substrate decomposition and pests.',
+    });
   } else if (input.temperature > 0 && input.temperature < 20) {
-    score += 8;
-    factors.push('Cool temperatures slow metabolism but can trap moisture locally.');
+    signals.push({
+      weight: 'minor',
+      message: 'Cool temperatures slow metabolism but can trap moisture locally.',
+    });
   }
 
   if (substrate.includes('kinshi') && input.humidity >= 75) {
-    score += 16;
-    factors.push('Kinshi-based substrate with high humidity is a common mite hotspot.');
+    signals.push({
+      weight: 'major',
+      message: 'Kinshi-based substrate with high humidity is a common mite hotspot.',
+    });
   }
 
   if (substrate.includes('flake') && input.humidity >= 78) {
-    score += 10;
-    factors.push('Flake soil stays wet longer at high humidity.');
+    signals.push({
+      weight: 'minor',
+      message: 'Flake soil stays wet longer at high humidity.',
+    });
   }
 
   if (
     (food.includes('banana') || food.includes('fruit') || food.includes('protein')) &&
     input.humidity >= 72
   ) {
-    score += 14;
-    factors.push('Protein or fruit diets spoil faster in humid containers.');
+    signals.push({
+      weight: 'minor',
+      message: 'Protein or fruit diets spoil faster in humid containers.',
+    });
   }
 
   if (input.problemType === 'mites') {
-    score += 12;
-    factors.push('Mites already reported — reinfestation risk is elevated.');
+    signals.push({
+      weight: 'minor',
+      message: 'Mites already reported — reinfestation risk is elevated.',
+    });
   } else if (input.problemType === 'mold') {
-    score += 10;
-    factors.push('Existing mold issue suggests microclimate imbalance.');
+    signals.push({
+      weight: 'minor',
+      message: 'Existing mold issue suggests microclimate imbalance.',
+    });
   } else if (input.problemType === 'over-wet') {
-    score += 15;
-    factors.push('Over-wet conditions strongly correlate with outbreaks.');
+    signals.push({
+      weight: 'major',
+      message: 'Over-wet conditions strongly correlate with pest problems.',
+    });
   }
 
   if (!input.foodType.trim()) {
-    score += 4;
-    factors.push('Food type not specified — prediction uses conservative defaults.');
+    signals.push({
+      weight: 'minor',
+      message: 'Food type not specified — prediction uses conservative defaults.',
+    });
   }
 
-  score = Math.min(95, Math.max(5, Math.round(score)));
-  const level = scoreToLevel(score);
+  return signals;
+}
 
-  const summaryByLevel: Record<OutbreakRiskLevel, string> = {
-    low: 'Conditions look relatively stable. Continue routine checks.',
-    moderate: 'Some risk factors detected. Adjust humidity or substrate soon.',
-    high: 'Several risk signals align. Inspect bottles and refresh substrate within 48h.',
-    critical: 'High outbreak likelihood. Isolate affected bottles and correct environment immediately.',
-  };
+function levelFromSignals(signals: RiskSignal[]): PestRiskLevel {
+  const majorCount = signals.filter((signal) => signal.weight === 'major').length;
+  const minorCount = signals.filter((signal) => signal.weight === 'minor').length;
+
+  if (majorCount >= 2 || (majorCount >= 1 && minorCount >= 2)) return 'high';
+  if (majorCount >= 1 || minorCount >= 2) return 'moderate';
+  return 'low';
+}
+
+const summaryByLevel: Record<PestRiskLevel, string> = {
+  low: 'Conditions look relatively stable. Continue routine checks.',
+  moderate: 'Some risk factors detected. Adjust humidity or substrate soon.',
+  high: 'Several risk signals align. Inspect bottles and refresh substrate within 48h.',
+};
+
+/**
+ * Placeholder heuristic until an AI model is connected.
+ * Replace `predictPestOutbreak` implementation with API call when ready.
+ */
+export function predictPestOutbreak(input: PestPredictionInput): PestPredictionResult {
+  const signals = collectRiskSignals(input);
+  const level = levelFromSignals(signals);
+  const factors =
+    signals.length > 0
+      ? signals.map((signal) => signal.message)
+      : ['No major risk flags from current inputs.'];
 
   return {
-    score,
     level,
     summary: summaryByLevel[level],
-    factors: factors.length > 0 ? factors : ['No major risk flags from current inputs.'],
+    factors,
     aiPayload: {
       ...input,
       modelVersion: 'placeholder-heuristic-v1',

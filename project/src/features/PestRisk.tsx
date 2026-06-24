@@ -11,8 +11,12 @@ import {
   getResolvedSubstrateFromPredictionForm,
   type PestPredictionFormState,
 } from '../components/pest/PestPredictionPanel';
-import { predictPestOutbreak, type PestPredictionResult } from '../utils/pestPrediction';
-import type { PestRisk, PestProblem, Severity, PestStatus } from '../types';
+import {
+  PEST_RISK_LEVEL_LABEL,
+  predictPestOutbreak,
+  type PestPredictionResult,
+} from '../utils/pestPrediction';
+import type { PestRisk, PestProblem, PestRiskLevel, Severity, PestStatus } from '../types';
 
 interface PestRiskProps {
   pestRisks: PestRisk[];
@@ -38,6 +42,12 @@ const severityOptions: { value: Severity; label: string }[] = [
 const severityVariant: Record<Severity, 'warning' | 'danger'> = {
   low: 'warning',
   medium: 'warning',
+  high: 'danger',
+};
+
+const riskLevelVariant: Record<PestRiskLevel, 'success' | 'warning' | 'danger'> = {
+  low: 'success',
+  moderate: 'warning',
   high: 'danger',
 };
 
@@ -104,8 +114,7 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
       humidity: predictionForm.humidity,
       foodType: predictionForm.foodType.trim(),
       ...(predictionResult && {
-        outbreakScore: predictionResult.score,
-        outbreakLevel: predictionResult.level,
+        riskLevel: predictionResult.level,
         predictionSummary: predictionResult.summary,
       }),
     };
@@ -131,7 +140,7 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
         <div>
           <h1 className="text-xl font-bold text-gray-100">Pest Risk Monitor</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Track pest issues and preview AI-powered outbreak predictions
+            Track pest issues and review qualitative risk assessments
           </p>
         </div>
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[10px] font-semibold text-amber-300 uppercase tracking-wide">
@@ -152,7 +161,7 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
             {openRisks.map((r) => (
               <Badge key={r.id} variant={severityVariant[r.severity]}>
                 {r.bottleId}: {problemLabel[r.problemType]}
-                {r.outbreakScore != null && ` · ${r.outbreakScore}% risk`}
+                {r.riskLevel != null && ` · ${PEST_RISK_LEVEL_LABEL[r.riskLevel]}`}
               </Badge>
             ))}
           </div>
@@ -160,9 +169,9 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
       )}
 
       <PremiumPaywall
-        title="Pest Outbreak Prediction"
-        subtitle="Enter environmental data to estimate outbreak likelihood. Designed for future AI model integration."
-        footer="Upgrade to Premium to unlock full AI predictions. Preview mode uses on-device placeholder logic."
+        title="Pest Risk Assessment"
+        subtitle="Enter environmental data to review qualitative risk factors. Designed for future AI model integration."
+        footer="Upgrade to Premium to unlock full AI assessments. Preview mode uses on-device placeholder logic."
       >
         <PestPredictionPanel
           form={predictionForm}
@@ -247,8 +256,10 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
                     <span className="text-xs text-gray-300 font-medium">{r.bottleId}</span>
                     <Badge variant={severityVariant[r.severity]}>{problemLabel[r.problemType]}</Badge>
                     <Badge variant="danger">{r.severity}</Badge>
-                    {r.outbreakScore != null && (
-                      <Badge variant="warning">{r.outbreakScore}% outbreak risk</Badge>
+                    {r.riskLevel != null && (
+                      <Badge variant={riskLevelVariant[r.riskLevel]}>
+                        {PEST_RISK_LEVEL_LABEL[r.riskLevel]}
+                      </Badge>
                     )}
                   </div>
                   <p className="text-[10px] text-gray-500 mt-1">
