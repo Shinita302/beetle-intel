@@ -15,7 +15,7 @@ export interface PairingFormOutcomes {
   emerged: number;
 }
 
-function milestoneDate(pairing: Pairing, recordedAt: string | undefined, fallback: string): string {
+function milestoneDate(recordedAt: string | undefined, fallback: string): string {
   return recordedAt || fallback;
 }
 
@@ -33,7 +33,7 @@ export function buildPairingLifecycle(pairing: Pairing): PairingMilestone[] {
   }
 
   if (pairing.eggsProduced > 0) {
-    const date = milestoneDate(pairing, pairing.eggsRecordedAt, pairing.pairingDate || pairing.createdAt);
+    const date = milestoneDate(pairing.eggsRecordedAt, pairing.pairingDate || pairing.createdAt);
     milestones.push({
       kind: 'eggs',
       label: 'Eggs produced',
@@ -45,7 +45,6 @@ export function buildPairingLifecycle(pairing: Pairing): PairingMilestone[] {
 
   if (pairing.hatched > 0) {
     const date = milestoneDate(
-      pairing,
       pairing.hatchedRecordedAt,
       pairing.eggsRecordedAt || pairing.pairingDate || pairing.createdAt
     );
@@ -60,7 +59,6 @@ export function buildPairingLifecycle(pairing: Pairing): PairingMilestone[] {
 
   if (pairing.emerged > 0) {
     const date = milestoneDate(
-      pairing,
       pairing.emergedRecordedAt,
       pairing.hatchedRecordedAt || pairing.eggsRecordedAt || pairing.pairingDate || pairing.createdAt
     );
