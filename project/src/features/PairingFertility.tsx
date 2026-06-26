@@ -1,69 +1,149 @@
-import { useState, useMemo } from 'react';
-import { Save, Calculator } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Pencil, Save, Calculator } from 'lucide-react';
 import { Card, CardHeader } from '../components/ui/Card';
-import { FormField, TextInput, NumberInput } from '../components/ui/FormField';
+import { FormField, TextInput, NumberInput, SelectInput } from '../components/ui/FormField';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { PairingBeetleSelects } from '../components/pairing/PairingBeetleSelects';
 import type { Beetle, Pairing } from '../types';
-import { beetleLabel, beetleProfileDetails, pairingEmergeRate, pairingFertilityScore, pairingHatchRate } from '../types';
+import { beetleLabel, pairingEmergeRate, pairingFertilityScore, pairingHatchRate } from '../types';
+import type { PairingBeetleSelection } from '@/utils/pairingBeetleFilters';
 
 interface PairingFertilityProps {
   beetles: Beetle[];
   pairings: Pairing[];
   onAdd: (pairing: Pairing) => void;
+  onUpdate: (pairing: Pairing) => void;
 }
 
-const emptyForm = {
+type PairingFormState = PairingBeetleSelection & {
+  pairingDate: string;
+  eggsProduced: number;
+  hatched: number;
+  emerged: number;
+};
+
+const emptyForm = (): PairingFormState => ({
   maleBeetleId: '',
   femaleBeetleId: '',
   pairingDate: '',
   eggsProduced: 0,
   hatched: 0,
   emerged: 0,
-};
+});
 
-export function PairingFertility({ beetles, pairings, onAdd }: PairingFertilityProps) {
-  const [form, setForm] = useState(emptyForm);
+function pairingToForm(pairing: Pairing): PairingFormState {
+  return {
+    maleBeetleId: pairing.maleBeetleId,
+    femaleBeetleId: pairing.femaleBeetleId,
+    pairingDate: pairing.pairingDate,
+    eggsProduced: pairing.eggsProduced,
+    hatched: pairing.hatched,
+    emerged: pairing.emerged,
+  };
+}
+
+function scoreVariant(score: number) {
+  if (score >= 60) return 'success' as const;
+  if (score >= 30) return 'warning' as const;
+  return 'danger' as const;
+}
+
+function PairingOutcomeFields({
+  form,
+  onChange,
+}: {
+  form: Pick<PairingFormState, 'eggsProduced' | 'hatched' | 'emerged'>;
+  onChange: <K extends 'eggsProduced' | 'hatched' | 'emerged'>(key: K, value: PairingFormState[K]) => void;
+}) {
+  const calculations = useMemo(() => {
+    const draft: Pairing = {
+      id: '',
+      maleBeetleId: '',
+      femaleBeetleId: '',
+      pairingDate: '',
+      eggsProduced: form.eggsProduced,
+      hatched: form.hatched,
+      emerged: form.emerged,
+      createdAt: '',
+    };
+    return {
+      hatchRate: pairingHatchRate(draft),
+      emergeRate: pairingEmergeRate(draft),
+      fertilityScore: pairingFertilityScore(draft),
+    };
+  }, [form.eggsProduced, form.hatched, form.emerged]);
+
+  return (
+    <>
+      <div className="md:col-span-2 border-t border-gray-800 pt-4 mt-1">
+        <div className="flex items-center gap-2 mb-4">
+          <Calculator className="w-4 h-4 text-teal-400" />
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Outcomes</span>
+        </div>
+      </div>
+
+      <FormField label="Eggs Produced">
+        <NumberInput value={form.eggsProduced} onChange={(v) => onChange('eggsProduced', v)} min={0} />
+      </FormField>
+
+      <FormField label="Hatched">
+        <NumberInput value={form.hatched} onChange={(v) => onChange('hatched', v)} min={0} />
+      </FormField>
+
+      <FormField label="Emerged">
+        <NumberInput value={form.emerged} onChange={(v) => onChange('emerged', v)} min={0} />
+      </FormField>
+
+      {(form.eggsProduced > 0 || form.hatched > 0) && (
+        <div className="md:col-span-2 mt-2 p-4 rounded-lg bg-gray-800/50 border border-gray-700/50">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="text-center">
+              <p className="text-[10px] text-gray-500 uppercase mb-1">Hatch Rate</p>
+              <p className="text-lg font-bold text-sky-400">{calculations.hatchRate}%</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] text-gray-500 uppercase mb-1">Emerge Rate</p>
+              <p className="text-lg font-bold text-emerald-400">{calculations.emergeRate}%</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] text-gray-500 uppercase mb-1">Fertility</p>
+              <Badge variant={scoreVariant(calculations.fertilityScore)} className="text-base px-3 py-1">
+                {calculations.fertilityScore}
+              </Badge>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: PairingFertilityProps) {
+  const [form, setForm] = useState<PairingFormState>(emptyForm);
   const [saved, setSaved] = useState(false);
+  const [editPairingId, setEditPairingId] = useState('');
+  const [editForm, setEditForm] = useState<PairingFormState | null>(null);
+  const [editSaved, setEditSaved] = useState(false);
 
   const nextId = `P-${String(pairings.length + 1).padStart(3, '0')}`;
+  const editingPairing = pairings.find((pairing) => pairing.id === editPairingId);
 
-  const males = beetles.filter((b) => b.sex === 'male');
-  const females = beetles.filter((b) => b.sex === 'female');
+  const pairingSelectOptions = pairings.map((pairing) => ({
+    value: pairing.id,
+    label: `${pairing.id} — ${beetleLabel(beetles, pairing.maleBeetleId)} × ${beetleLabel(beetles, pairing.femaleBeetleId)}`,
+  }));
 
-  const calculations = useMemo(() => {
-    const hatchRate = pairingHatchRate({
-      id: '',
-      maleBeetleId: '',
-      femaleBeetleId: '',
-      pairingDate: '',
-      eggsProduced: form.eggsProduced,
-      hatched: form.hatched,
-      emerged: form.emerged,
-      createdAt: '',
-    });
-    const emergeRate = pairingEmergeRate({
-      id: '',
-      maleBeetleId: '',
-      femaleBeetleId: '',
-      pairingDate: '',
-      eggsProduced: form.eggsProduced,
-      hatched: form.hatched,
-      emerged: form.emerged,
-      createdAt: '',
-    });
-    const fertilityScore = pairingFertilityScore({
-      id: '',
-      maleBeetleId: '',
-      femaleBeetleId: '',
-      pairingDate: '',
-      eggsProduced: form.eggsProduced,
-      hatched: form.hatched,
-      emerged: form.emerged,
-      createdAt: '',
-    });
-    return { hatchRate, emergeRate, fertilityScore };
-  }, [form.eggsProduced, form.hatched, form.emerged]);
+  useEffect(() => {
+    if (!editPairingId) {
+      setEditForm(null);
+      return;
+    }
+    const pairing = pairings.find((item) => item.id === editPairingId);
+    if (pairing) {
+      setEditForm(pairingToForm(pairing));
+    }
+  }, [editPairingId, pairings]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,19 +158,26 @@ export function PairingFertility({ beetles, pairings, onAdd }: PairingFertilityP
       createdAt: new Date().toISOString().slice(0, 10),
     };
     onAdd(pairing);
-    setForm(emptyForm);
+    setForm(emptyForm());
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const update = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
+  const handleEditSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPairing || !editForm) return;
 
-  const scoreVariant = (score: number) => {
-    if (score >= 60) return 'success' as const;
-    if (score >= 30) return 'warning' as const;
-    return 'danger' as const;
+    onUpdate({
+      ...editingPairing,
+      maleBeetleId: editForm.maleBeetleId,
+      femaleBeetleId: editForm.femaleBeetleId,
+      pairingDate: editForm.pairingDate,
+      eggsProduced: editForm.eggsProduced,
+      hatched: editForm.hatched,
+      emerged: editForm.emerged,
+    });
+    setEditSaved(true);
+    setTimeout(() => setEditSaved(false), 2000);
   };
 
   return (
@@ -105,90 +192,21 @@ export function PairingFertility({ beetles, pairings, onAdd }: PairingFertilityP
           <CardHeader title="Pairing Record" subtitle={`Record ID: ${nextId}`} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField label="Male" required>
-              <select
-                value={form.maleBeetleId}
-                onChange={(e) => update('maleBeetleId', e.target.value)}
-                required
-                className="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors appearance-none"
-              >
-                <option value="" disabled>Select male</option>
-                {males.map((b) => {
-                  const details = beetleProfileDetails(b);
-                  return (
-                    <option key={b.id} value={b.id}>
-                      {beetleLabel(beetles, b.id)}
-                      {details ? ` · ${details}` : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            </FormField>
-
-            <FormField label="Female" required>
-              <select
-                value={form.femaleBeetleId}
-                onChange={(e) => update('femaleBeetleId', e.target.value)}
-                required
-                className="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors appearance-none"
-              >
-                <option value="" disabled>Select female</option>
-                {females.map((b) => {
-                  const details = beetleProfileDetails(b);
-                  return (
-                    <option key={b.id} value={b.id}>
-                      {beetleLabel(beetles, b.id)}
-                      {details ? ` · ${details}` : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            </FormField>
+            <PairingBeetleSelects
+              beetles={beetles}
+              selection={form}
+              onChange={(selection) => setForm((prev) => ({ ...prev, ...selection }))}
+            />
 
             <FormField label="Pairing Date">
-              <TextInput type="date" value={form.pairingDate} onChange={(v) => update('pairingDate', v)} />
+              <TextInput type="date" value={form.pairingDate} onChange={(v) => setForm((prev) => ({ ...prev, pairingDate: v }))} />
             </FormField>
 
-            <div className="md:col-span-2 border-t border-gray-800 pt-4 mt-1">
-              <div className="flex items-center gap-2 mb-4">
-                <Calculator className="w-4 h-4 text-teal-400" />
-                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Outcomes</span>
-              </div>
-            </div>
-
-            <FormField label="Eggs Produced">
-              <NumberInput value={form.eggsProduced} onChange={(v) => update('eggsProduced', v)} min={0} />
-            </FormField>
-
-            <FormField label="Hatched">
-              <NumberInput value={form.hatched} onChange={(v) => update('hatched', v)} min={0} />
-            </FormField>
-
-            <FormField label="Emerged">
-              <NumberInput value={form.emerged} onChange={(v) => update('emerged', v)} min={0} />
-            </FormField>
+            <PairingOutcomeFields
+              form={form}
+              onChange={(key, value) => setForm((prev) => ({ ...prev, [key]: value }))}
+            />
           </div>
-
-          {(form.eggsProduced > 0 || form.hatched > 0) && (
-            <div className="mt-6 p-4 rounded-lg bg-gray-800/50 border border-gray-700/50">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="text-center">
-                  <p className="text-[10px] text-gray-500 uppercase mb-1">Hatch Rate</p>
-                  <p className="text-lg font-bold text-sky-400">{calculations.hatchRate}%</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] text-gray-500 uppercase mb-1">Emerge Rate</p>
-                  <p className="text-lg font-bold text-emerald-400">{calculations.emergeRate}%</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] text-gray-500 uppercase mb-1">Fertility</p>
-                  <Badge variant={scoreVariant(calculations.fertilityScore)} className="text-base px-3 py-1">
-                    {calculations.fertilityScore}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          )}
 
           <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-800">
             <div>{saved && <Badge variant="success">Pairing saved!</Badge>}</div>
@@ -199,6 +217,60 @@ export function PairingFertility({ beetles, pairings, onAdd }: PairingFertilityP
           </div>
         </Card>
       </form>
+
+      {pairings.length > 0 && (
+        <Card>
+          <CardHeader title="Edit Pairing" subtitle="Update an existing pairing record" />
+          <form onSubmit={handleEditSave}>
+            <FormField label="Select pairing">
+              <SelectInput
+                value={editPairingId}
+                onChange={(id) => {
+                  setEditPairingId(id);
+                  setEditSaved(false);
+                }}
+                options={pairingSelectOptions}
+                placeholder="Choose a pairing to edit…"
+              />
+            </FormField>
+
+            {editForm && editingPairing && (
+              <div className="mt-5 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <PairingBeetleSelects
+                    beetles={beetles}
+                    selection={editForm}
+                    onChange={(selection) => setEditForm((prev) => (prev ? { ...prev, ...selection } : prev))}
+                  />
+
+                  <FormField label="Pairing Date">
+                    <TextInput
+                      type="date"
+                      value={editForm.pairingDate}
+                      onChange={(v) => setEditForm((prev) => (prev ? { ...prev, pairingDate: v } : prev))}
+                    />
+                  </FormField>
+
+                  <PairingOutcomeFields
+                    form={editForm}
+                    onChange={(key, value) =>
+                      setEditForm((prev) => (prev ? { ...prev, [key]: value } : prev))
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-4 border-t border-gray-800">
+                  <div>{editSaved && <Badge variant="success">Pairing updated</Badge>}</div>
+                  <Button type="submit" variant="primary">
+                    <Pencil className="w-4 h-4" />
+                    Save changes
+                  </Button>
+                </div>
+              </div>
+            )}
+          </form>
+        </Card>
+      )}
 
       {pairings.length > 0 && (
         <Card>
@@ -216,17 +288,17 @@ export function PairingFertility({ beetles, pairings, onAdd }: PairingFertilityP
                 </tr>
               </thead>
               <tbody>
-                {pairings.slice(-10).reverse().map((p) => {
-                  const score = pairingFertilityScore(p);
+                {pairings.slice(-10).reverse().map((pairing) => {
+                  const score = pairingFertilityScore(pairing);
                   return (
-                    <tr key={p.id} className="border-b border-gray-800/50">
+                    <tr key={pairing.id} className="border-b border-gray-800/50">
                       <td className="py-2 text-gray-300">
-                        {beetleLabel(beetles, p.maleBeetleId)} × {beetleLabel(beetles, p.femaleBeetleId)}
+                        {beetleLabel(beetles, pairing.maleBeetleId)} × {beetleLabel(beetles, pairing.femaleBeetleId)}
                       </td>
-                      <td className="py-2 text-gray-500">{p.pairingDate}</td>
-                      <td className="py-2 text-right text-gray-400">{p.eggsProduced}</td>
-                      <td className="py-2 text-right text-gray-400">{p.hatched}</td>
-                      <td className="py-2 text-right text-emerald-400 font-medium">{p.emerged}</td>
+                      <td className="py-2 text-gray-500">{pairing.pairingDate}</td>
+                      <td className="py-2 text-right text-gray-400">{pairing.eggsProduced}</td>
+                      <td className="py-2 text-right text-gray-400">{pairing.hatched}</td>
+                      <td className="py-2 text-right text-emerald-400 font-medium">{pairing.emerged}</td>
                       <td className="py-2 text-right">
                         <Badge variant={scoreVariant(score)}>{score}</Badge>
                       </td>

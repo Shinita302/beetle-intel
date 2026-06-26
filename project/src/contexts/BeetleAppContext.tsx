@@ -56,6 +56,7 @@ interface BeetleAppContextValue {
   updateSpeciesInventory: (rows: SpeciesInventory[]) => void;
   upsertSpeciesInventory: (row: SpeciesInventory) => void;
   addPairing: (pairing: Pairing) => void;
+  updatePairing: (pairing: Pairing) => void;
   addPestRisk: (risk: PestRisk) => void;
   updatePestRisk: (risk: PestRisk) => void;
   importData: (payload: {
@@ -296,6 +297,8 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
           return normalizeSpeciesInventory(next);
         }),
       addPairing: (pairing) => setPairings((prev) => [pairing, ...prev]),
+      updatePairing: (pairing) =>
+        setPairings((prev) => prev.map((item) => (item.id === pairing.id ? pairing : item))),
       addPestRisk: (risk) => setPestRisks((prev) => [risk, ...prev]),
       updatePestRisk: (risk) =>
         setPestRisks((prev) => prev.map((r) => (r.id === risk.id ? risk : r))),
