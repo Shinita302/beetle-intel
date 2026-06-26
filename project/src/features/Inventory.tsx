@@ -4,6 +4,8 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { StatCard } from '../components/ui/StatCard';
 import { FormField, TextInput, NumberInput } from '../components/ui/FormField';
 import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import {
   activeLarvaeCount,
   emptySpeciesInventory,
@@ -42,6 +44,9 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
   const [showAdd, setShowAdd] = useState(false);
   const [newSpecies, setNewSpecies] = useState('');
   const [draft, setDraft] = useState<SpeciesInventory | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<SpeciesInventory | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
 
   const summary = useMemo(() => {
     const totalSpecies = speciesInventory.length;
@@ -115,9 +120,32 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
     setShowAdd(false);
   };
 
-  const deleteRow = (species: string) => {
-    onUpdate(speciesInventory.filter((row) => row.species !== species));
-    if (draft?.species === species) setDraft(null);
+  const requestDelete = (row: SpeciesInventory) => {
+    setDeleteError(null);
+    setPendingDelete(row);
+  };
+
+  const cancelDelete = () => {
+    setPendingDelete(null);
+    setDeleteError(null);
+  };
+
+  const confirmDelete = () => {
+    if (!pendingDelete) return;
+    try {
+      const nextRows = speciesInventory.filter((row) => row.id !== pendingDelete.id);
+      if (nextRows.length === speciesInventory.length) {
+        throw new Error('Population record not found. It may have already been removed.');
+      }
+      onUpdate(nextRows);
+      if (draft?.id === pendingDelete.id) setDraft(null);
+      setPendingDelete(null);
+      setDeleteError(null);
+      setDeleteSuccess(true);
+      window.setTimeout(() => setDeleteSuccess(false), 2500);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Could not delete this population record.');
+    }
   };
 
   return (
@@ -188,7 +216,10 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
 
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <CardHeader title="Population Table" subtitle={`${filtered.length} species`} />
+          <div className="flex flex-wrap items-center gap-3">
+            <CardHeader title="Population Table" subtitle={`${filtered.length} species`} />
+            {deleteSuccess && <Badge variant="success">Population record deleted</Badge>}
+          </div>
           <div className="relative w-full sm:w-64">
             <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 z-10" />
             <input
@@ -247,7 +278,7 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
                       <button type="button" className="text-sky-400 hover:text-sky-300" onClick={() => startEdit(row)}>
                         Edit
                       </button>
-                      <button type="button" className="text-red-400/80 hover:text-red-300" onClick={() => deleteRow(row.species)}>
+                      <button type="button" className="text-red-400/80 hover:text-red-300" onClick={() => requestDelete(row)}>
                         Delete
                       </button>
                     </div>
@@ -299,6 +330,17 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
           <p className="text-[11px] text-gray-600 mt-3">Last updated counts reflect your most recent edits.</p>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete Population Record?"
+        message="Are you sure you want to delete this population record? This action cannot be undone."
+        cancelLabel="Cancel"
+        confirmLabel="Delete"
+        onCancel={cancelDelete}
+        onConfirm={confirmDelete}
+        error={deleteError}
+      />
     </div>
   );
 }
