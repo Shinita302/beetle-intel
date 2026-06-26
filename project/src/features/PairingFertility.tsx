@@ -8,6 +8,11 @@ import { PairingBeetleSelects } from '../components/pairing/PairingBeetleSelects
 import type { Beetle, Pairing } from '../types';
 import { beetleLabel, pairingEmergeRate, pairingFertilityScore, pairingHatchRate } from '../types';
 import type { PairingBeetleSelection } from '@/utils/pairingBeetleFilters';
+import {
+  isPairingOutcomesValid,
+  validatePairingOutcomes,
+  type PairingOutcomesErrors,
+} from '@/utils/pairingOutcomesValidation';
 
 interface PairingFertilityProps {
   beetles: Beetle[];
@@ -51,11 +56,15 @@ function scoreVariant(score: number) {
 
 function PairingOutcomeFields({
   form,
+  errors,
   onChange,
 }: {
   form: Pick<PairingFormState, 'eggsProduced' | 'hatched' | 'emerged'>;
+  errors: PairingOutcomesErrors;
   onChange: <K extends 'eggsProduced' | 'hatched' | 'emerged'>(key: K, value: PairingFormState[K]) => void;
 }) {
+  const outcomesValid = isPairingOutcomesValid(form);
+
   const calculations = useMemo(() => {
     const draft: Pairing = {
       id: '',
@@ -83,19 +92,24 @@ function PairingOutcomeFields({
         </div>
       </div>
 
-      <FormField label="Eggs Produced">
-        <NumberInput value={form.eggsProduced} onChange={(v) => onChange('eggsProduced', v)} min={0} />
+      <FormField label="Eggs Produced" error={errors.eggsProduced}>
+        <NumberInput
+          value={form.eggsProduced}
+          onChange={(v) => onChange('eggsProduced', v)}
+          min={0}
+          step={1}
+        />
       </FormField>
 
-      <FormField label="Hatched">
-        <NumberInput value={form.hatched} onChange={(v) => onChange('hatched', v)} min={0} />
+      <FormField label="Hatched" error={errors.hatched}>
+        <NumberInput value={form.hatched} onChange={(v) => onChange('hatched', v)} min={0} step={1} />
       </FormField>
 
-      <FormField label="Emerged">
-        <NumberInput value={form.emerged} onChange={(v) => onChange('emerged', v)} min={0} />
+      <FormField label="Emerged" error={errors.emerged}>
+        <NumberInput value={form.emerged} onChange={(v) => onChange('emerged', v)} min={0} step={1} />
       </FormField>
 
-      {(form.eggsProduced > 0 || form.hatched > 0) && (
+      {outcomesValid && (form.eggsProduced > 0 || form.hatched > 0) && (
         <div className="md:col-span-2 mt-2 p-4 rounded-lg bg-gray-800/50 border border-gray-700/50">
           <div className="grid grid-cols-3 gap-3">
             <div className="text-center">
@@ -134,6 +148,21 @@ export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: Pairing
     label: `${pairing.id} — ${beetleLabel(beetles, pairing.maleBeetleId)} × ${beetleLabel(beetles, pairing.femaleBeetleId)}`,
   }));
 
+  const formOutcomeErrors = useMemo(
+    () => validatePairingOutcomes(form),
+    [form.eggsProduced, form.hatched, form.emerged]
+  );
+  const editOutcomeErrors = useMemo(
+    () => (editForm ? validatePairingOutcomes(editForm) : {}),
+    [editForm]
+  );
+
+  const canSaveCreate =
+    Boolean(form.maleBeetleId && form.femaleBeetleId) && isPairingOutcomesValid(form);
+  const canSaveEdit =
+    Boolean(editForm && editForm.maleBeetleId && editForm.femaleBeetleId) &&
+    isPairingOutcomesValid(editForm);
+
   useEffect(() => {
     if (!editPairingId) {
       setEditForm(null);
@@ -147,6 +176,8 @@ export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: Pairing
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canSaveCreate) return;
+
     const pairing: Pairing = {
       id: nextId,
       maleBeetleId: form.maleBeetleId,
@@ -165,7 +196,7 @@ export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: Pairing
 
   const handleEditSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingPairing || !editForm) return;
+    if (!editingPairing || !editForm || !canSaveEdit) return;
 
     onUpdate({
       ...editingPairing,
@@ -204,13 +235,14 @@ export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: Pairing
 
             <PairingOutcomeFields
               form={form}
+              errors={formOutcomeErrors}
               onChange={(key, value) => setForm((prev) => ({ ...prev, [key]: value }))}
             />
           </div>
 
           <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-800">
             <div>{saved && <Badge variant="success">Pairing saved!</Badge>}</div>
-            <Button type="submit" variant="primary">
+            <Button type="submit" variant="primary" disabled={!canSaveCreate}>
               <Save className="w-4 h-4" />
               Save Pairing
             </Button>
@@ -253,6 +285,7 @@ export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: Pairing
 
                   <PairingOutcomeFields
                     form={editForm}
+                    errors={editOutcomeErrors}
                     onChange={(key, value) =>
                       setEditForm((prev) => (prev ? { ...prev, [key]: value } : prev))
                     }
@@ -261,7 +294,7 @@ export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: Pairing
 
                 <div className="flex items-center justify-between pt-4 border-t border-gray-800">
                   <div>{editSaved && <Badge variant="success">Pairing updated</Badge>}</div>
-                  <Button type="submit" variant="primary">
+                  <Button type="submit" variant="primary" disabled={!canSaveEdit}>
                     <Pencil className="w-4 h-4" />
                     Save changes
                   </Button>
