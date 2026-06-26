@@ -246,6 +246,9 @@ export const mockPairings: Pairing[] = [
     eggsProduced: 24,
     hatched: 20,
     emerged: 12,
+    eggsRecordedAt: '2025-10-08',
+    hatchedRecordedAt: '2025-11-02',
+    emergedRecordedAt: '2025-12-15',
     createdAt: '2025-10-01',
   },
   {
@@ -256,6 +259,9 @@ export const mockPairings: Pairing[] = [
     eggsProduced: 18,
     hatched: 14,
     emerged: 7,
+    eggsRecordedAt: '2025-11-20',
+    hatchedRecordedAt: '2025-12-10',
+    emergedRecordedAt: '2026-01-05',
     createdAt: '2025-11-15',
   },
   {
@@ -266,7 +272,19 @@ export const mockPairings: Pairing[] = [
     eggsProduced: 20,
     hatched: 12,
     emerged: 0,
+    eggsRecordedAt: '2026-01-25',
+    hatchedRecordedAt: '2026-02-18',
     createdAt: '2026-01-20',
+  },
+  {
+    id: 'P-004',
+    maleBeetleId: 'B-006',
+    femaleBeetleId: 'B-005',
+    pairingDate: '2026-03-01',
+    eggsProduced: 0,
+    hatched: 0,
+    emerged: 0,
+    createdAt: '2026-03-01',
   },
 ];
 

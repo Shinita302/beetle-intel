@@ -36,6 +36,9 @@ export function normalizePairing(raw: Record<string, unknown>): Pairing {
     eggsProduced: Number(raw.eggsProduced ?? raw.totalEggsLaid ?? 0),
     hatched: Number(raw.hatched ?? raw.hatchedEggs ?? 0),
     emerged: Number(raw.emerged ?? raw.emergedAdults ?? 0),
+    eggsRecordedAt: raw.eggsRecordedAt ? String(raw.eggsRecordedAt) : undefined,
+    hatchedRecordedAt: raw.hatchedRecordedAt ? String(raw.hatchedRecordedAt) : undefined,
+    emergedRecordedAt: raw.emergedRecordedAt ? String(raw.emergedRecordedAt) : undefined,
     createdAt: String(raw.createdAt ?? ''),
   };
 }

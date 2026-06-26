@@ -137,6 +137,9 @@ export interface Pairing {
   eggsProduced: number;
   hatched: number;
   emerged: number;
+  eggsRecordedAt?: string;
+  hatchedRecordedAt?: string;
+  emergedRecordedAt?: string;
   createdAt: string;
 }
 
