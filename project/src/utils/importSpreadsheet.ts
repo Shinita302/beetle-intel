@@ -1517,6 +1517,7 @@ export function generateRecordsFromConfirmed(params: {
         sex,
         source: `import-row-${row.source_row}`,
         generation: f.generation,
+        origin: '',
         notes: f.notes?.trim() ?? '',
         bloodline: '',
         status: stage,

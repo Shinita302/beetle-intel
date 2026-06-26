@@ -4,7 +4,13 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { FormField, TextInput, SelectInput } from '../components/ui/FormField';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import type { Beetle, BeetleSex, BeetleStatus } from '../types';
+import type { Beetle, BeetleOrigin, BeetleSex, BeetleStatus } from '../types';
+import {
+  BEETLE_ORIGIN_OPTIONS,
+  beetleGenerationError,
+  beetleOriginError,
+  normalizeBeetleGeneration,
+} from '../utils/beetleProfileValidation';
 
 interface AddBeetleProps {
   beetles: Beetle[];
@@ -32,13 +38,14 @@ const emptyForm = {
   sex: 'unknown' as BeetleSex,
   status: 'larva' as BeetleStatus,
   generation: '',
+  origin: '' as BeetleOrigin | '',
   notes: '',
   source: '',
   bloodline: '',
 };
 
 type FormState = typeof emptyForm;
-type FormErrors = Partial<Record<'species', string>>;
+type FormErrors = Partial<Record<'species' | 'generation' | 'origin', string>>;
 
 function beetleToForm(beetle: Beetle): FormState {
   return {
@@ -47,6 +54,7 @@ function beetleToForm(beetle: Beetle): FormState {
     sex: beetle.sex,
     status: beetle.status,
     generation: beetle.generation,
+    origin: beetle.origin,
     notes: beetle.notes,
     source: beetle.source,
     bloodline: beetle.bloodline,
@@ -72,7 +80,8 @@ function buildBeetleFromForm(form: FormState, id: string, createdAt: string): Be
     species,
     sex: form.sex,
     status: form.status,
-    generation: form.generation.trim(),
+    generation: normalizeBeetleGeneration(form.generation),
+    origin: form.origin as BeetleOrigin,
     notes: form.notes.trim(),
     source: form.source.trim(),
     bloodline: form.bloodline.trim(),
@@ -138,6 +147,14 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
     if (!state.species.trim()) {
       next.species = 'Species is required.';
     }
+    const generationError = beetleGenerationError(state.generation);
+    if (generationError) {
+      next.generation = generationError;
+    }
+    const originError = beetleOriginError(state.origin);
+    if (originError) {
+      next.origin = originError;
+    }
     return next;
   };
 
@@ -145,6 +162,12 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
     setForm((prev) => ({ ...prev, [key]: value }));
     if (key === 'species' && errors.species) {
       setErrors((prev) => ({ ...prev, species: undefined }));
+    }
+    if (key === 'generation' && errors.generation) {
+      setErrors((prev) => ({ ...prev, generation: undefined }));
+    }
+    if (key === 'origin' && errors.origin) {
+      setErrors((prev) => ({ ...prev, origin: undefined }));
     }
   };
 
@@ -183,6 +206,12 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
     setEditForm((prev) => (prev ? { ...prev, [key]: value } : prev));
     if (key === 'species' && editErrors.species) {
       setEditErrors((prev) => ({ ...prev, species: undefined }));
+    }
+    if (key === 'generation' && editErrors.generation) {
+      setEditErrors((prev) => ({ ...prev, generation: undefined }));
+    }
+    if (key === 'origin' && editErrors.origin) {
+      setEditErrors((prev) => ({ ...prev, origin: undefined }));
     }
   };
 
@@ -249,11 +278,22 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
               />
             </FormField>
 
-            <FormField label="Generation">
+            <FormField label="Generation" error={errors.generation}>
               <TextInput
                 value={form.generation}
                 onChange={(v) => update('generation', v)}
-                placeholder="e.g. F1, F2, CB, WC"
+                placeholder="e.g. F1, F2, F20"
+                invalid={Boolean(errors.generation)}
+              />
+            </FormField>
+
+            <FormField label="Origin" required error={errors.origin}>
+              <SelectInput
+                value={form.origin}
+                onChange={(v) => update('origin', v as BeetleOrigin)}
+                options={BEETLE_ORIGIN_OPTIONS}
+                placeholder="Select origin…"
+                invalid={Boolean(errors.origin)}
               />
             </FormField>
 
@@ -323,8 +363,22 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
                       options={sexOptions}
                     />
                   </FormField>
-                  <FormField label="Generation">
-                    <TextInput value={editForm.generation} onChange={(v) => updateEdit('generation', v)} />
+                  <FormField label="Generation" error={editErrors.generation}>
+                    <TextInput
+                      value={editForm.generation}
+                      onChange={(v) => updateEdit('generation', v)}
+                      placeholder="e.g. F1, F2, F20"
+                      invalid={Boolean(editErrors.generation)}
+                    />
+                  </FormField>
+                  <FormField label="Origin" required error={editErrors.origin}>
+                    <SelectInput
+                      value={editForm.origin}
+                      onChange={(v) => updateEdit('origin', v as BeetleOrigin)}
+                      options={BEETLE_ORIGIN_OPTIONS}
+                      placeholder="Select origin…"
+                      invalid={Boolean(editErrors.origin)}
+                    />
                   </FormField>
                   <FormField label="Notes" className="md:col-span-2">
                     <textarea
@@ -361,6 +415,7 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
                   <th className="text-left py-2 text-gray-500 font-medium">Species</th>
                   <th className="text-left py-2 text-gray-500 font-medium">Sex</th>
                   <th className="text-left py-2 text-gray-500 font-medium">Gen</th>
+                  <th className="text-left py-2 text-gray-500 font-medium">Origin</th>
                   <th className="text-left py-2 text-gray-500 font-medium">Status</th>
                 </tr>
               </thead>
@@ -374,6 +429,7 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
                       <Badge variant={sexBadgeVariant(b.sex)}>{sexLabel(b.sex)}</Badge>
                     </td>
                     <td className="py-2 text-gray-400">{b.generation || '—'}</td>
+                    <td className="py-2 text-gray-400">{b.origin || '—'}</td>
                     <td className="py-2">
                       <Badge
                         variant={

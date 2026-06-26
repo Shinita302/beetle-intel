@@ -1,5 +1,6 @@
 export type BeetleStatus = 'larva' | 'pupa' | 'adult' | 'dead' | 'sold';
 export type BeetleSex = 'male' | 'female' | 'unknown';
+export type BeetleOrigin = 'CB' | 'WC';
 export type GrowthStage = 'Egg' | 'L1' | 'L2' | 'L3' | 'Pre-Pupa' | 'Pupa' | 'Adult';
 export type PestProblem = 'mites' | 'mold' | 'dryness' | 'over-wet' | 'smell' | 'unknown';
 export type Severity = 'low' | 'medium' | 'high';
@@ -15,6 +16,7 @@ export interface Beetle {
   sex: BeetleSex;
   status: BeetleStatus;
   generation: string;
+  origin: BeetleOrigin | '';
   notes: string;
   source: string;
   bloodline: string;

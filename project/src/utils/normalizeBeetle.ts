@@ -29,6 +29,7 @@ export function normalizeBeetle(raw: LegacyBeetle): Beetle {
     sex: normalizeSex(raw.sex),
     status: (raw.status as BeetleStatus | undefined) ?? 'larva',
     generation: raw.generation != null ? String(raw.generation) : '',
+    origin: raw.origin === 'CB' || raw.origin === 'WC' ? raw.origin : '',
     notes: raw.notes ?? '',
     source: raw.source ?? '',
     bloodline: raw.bloodline ?? '',
