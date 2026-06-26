@@ -160,7 +160,8 @@ export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: Pairing
   const canSaveCreate =
     Boolean(form.maleBeetleId && form.femaleBeetleId) && isPairingOutcomesValid(form);
   const canSaveEdit =
-    Boolean(editForm && editForm.maleBeetleId && editForm.femaleBeetleId) &&
+    editForm != null &&
+    Boolean(editForm.maleBeetleId && editForm.femaleBeetleId) &&
     isPairingOutcomesValid(editForm);
 
   useEffect(() => {
