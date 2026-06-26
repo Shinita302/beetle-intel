@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   beetleGenerationError,
   beetleOriginError,
+  beetleSizeMmError,
   normalizeBeetleGeneration,
+  normalizeBeetleSizeMm,
 } from './beetleProfileValidation';
 
 describe('normalizeBeetleGeneration', () => {
@@ -43,5 +45,21 @@ describe('beetleOriginError', () => {
     expect(beetleOriginError('CB')).toBeUndefined();
     expect(beetleOriginError('WC')).toBeUndefined();
     expect(beetleOriginError('WD')).toBeDefined();
+  });
+});
+
+describe('beetleSizeMmError', () => {
+  it('accepts optional and valid sizes', () => {
+    expect(beetleSizeMmError(0)).toBeUndefined();
+    expect(beetleSizeMmError(72.5)).toBeUndefined();
+    expect(beetleSizeMmError(301)).toBeDefined();
+  });
+});
+
+describe('normalizeBeetleSizeMm', () => {
+  it('rounds to one decimal and clears invalid values', () => {
+    expect(normalizeBeetleSizeMm(72.54)).toBe(72.5);
+    expect(normalizeBeetleSizeMm(0)).toBe(0);
+    expect(normalizeBeetleSizeMm(-1)).toBe(0);
   });
 });

@@ -17,6 +17,8 @@ export interface Beetle {
   status: BeetleStatus;
   generation: string;
   origin: BeetleOrigin | '';
+  sizeMm: number;
+  color: string;
   notes: string;
   source: string;
   bloodline: string;
@@ -157,6 +159,19 @@ export function beetleLabel(beetles: Beetle[], beetleId: string): string {
     return `${beetle.name} (${beetle.species || beetle.id})`;
   }
   return beetle.name || beetle.species || beetle.id;
+}
+
+/** Optional size/color suffix for beetle pickers and detail rows. */
+export function beetleProfileDetails(beetle: Beetle): string {
+  const parts: string[] = [];
+  if (beetle.sizeMm > 0) {
+    const rounded = Number.isInteger(beetle.sizeMm) ? String(beetle.sizeMm) : beetle.sizeMm.toFixed(1);
+    parts.push(`${rounded} mm`);
+  }
+  if (beetle.color.trim()) {
+    parts.push(beetle.color.trim());
+  }
+  return parts.join(' · ');
 }
 
 export interface PestRisk {

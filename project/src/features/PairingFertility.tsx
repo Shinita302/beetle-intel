@@ -5,7 +5,7 @@ import { FormField, TextInput, NumberInput } from '../components/ui/FormField';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import type { Beetle, Pairing } from '../types';
-import { beetleLabel, pairingEmergeRate, pairingFertilityScore, pairingHatchRate } from '../types';
+import { beetleLabel, beetleProfileDetails, pairingEmergeRate, pairingFertilityScore, pairingHatchRate } from '../types';
 
 interface PairingFertilityProps {
   beetles: Beetle[];
@@ -113,11 +113,15 @@ export function PairingFertility({ beetles, pairings, onAdd }: PairingFertilityP
                 className="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors appearance-none"
               >
                 <option value="" disabled>Select male</option>
-                {males.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {beetleLabel(beetles, b.id)}
-                  </option>
-                ))}
+                {males.map((b) => {
+                  const details = beetleProfileDetails(b);
+                  return (
+                    <option key={b.id} value={b.id}>
+                      {beetleLabel(beetles, b.id)}
+                      {details ? ` · ${details}` : ''}
+                    </option>
+                  );
+                })}
               </select>
             </FormField>
 
@@ -129,11 +133,15 @@ export function PairingFertility({ beetles, pairings, onAdd }: PairingFertilityP
                 className="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors appearance-none"
               >
                 <option value="" disabled>Select female</option>
-                {females.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {beetleLabel(beetles, b.id)}
-                  </option>
-                ))}
+                {females.map((b) => {
+                  const details = beetleProfileDetails(b);
+                  return (
+                    <option key={b.id} value={b.id}>
+                      {beetleLabel(beetles, b.id)}
+                      {details ? ` · ${details}` : ''}
+                    </option>
+                  );
+                })}
               </select>
             </FormField>
 

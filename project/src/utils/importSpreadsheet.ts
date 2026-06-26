@@ -1518,6 +1518,8 @@ export function generateRecordsFromConfirmed(params: {
         source: `import-row-${row.source_row}`,
         generation: f.generation,
         origin: '',
+        sizeMm: 0,
+        color: '',
         notes: f.notes?.trim() ?? '',
         bloodline: '',
         status: stage,

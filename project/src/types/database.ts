@@ -27,6 +27,8 @@ export interface BeetleProfileMeta {
   status?: string;
   generation?: string;
   origin?: BeetleOrigin | '';
+  sizeMm?: number;
+  color?: string;
   notes?: string;
   source?: string;
   bloodline?: string;

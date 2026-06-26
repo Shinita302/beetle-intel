@@ -30,6 +30,13 @@ export function normalizeBeetle(raw: LegacyBeetle): Beetle {
     status: (raw.status as BeetleStatus | undefined) ?? 'larva',
     generation: raw.generation != null ? String(raw.generation) : '',
     origin: raw.origin === 'CB' || raw.origin === 'WC' ? raw.origin : '',
+    sizeMm:
+      typeof raw.sizeMm === 'number' && raw.sizeMm > 0
+        ? raw.sizeMm
+        : typeof raw.adultSize === 'number' && raw.adultSize > 0
+          ? raw.adultSize
+          : 0,
+    color: raw.color != null ? String(raw.color) : '',
     notes: raw.notes ?? '',
     source: raw.source ?? '',
     bloodline: raw.bloodline ?? '',
