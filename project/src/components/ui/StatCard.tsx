@@ -3,13 +3,15 @@ import type { LucideIcon } from 'lucide-react';
 interface StatCardProps {
   label: string;
   value: string | number;
+  detail?: string;
+  valueClassName?: string;
   icon: LucideIcon;
   trend?: { value: number; label: string };
   color: string;
   onClick?: () => void;
 }
 
-export function StatCard({ label, value, icon: Icon, trend, color, onClick }: StatCardProps) {
+export function StatCard({ label, value, detail, valueClassName, icon: Icon, trend, color, onClick }: StatCardProps) {
   const content = (
     <>
       <div className="flex items-center justify-between">
@@ -18,18 +20,21 @@ export function StatCard({ label, value, icon: Icon, trend, color, onClick }: St
           <Icon className="w-4 h-4" />
         </div>
       </div>
-      <div className="flex items-end gap-2">
-        <span className="text-2xl font-bold text-gray-100">{value}</span>
-        {trend && (
-          <span
-            className={`text-xs font-medium mb-1 ${
-              trend.value >= 0 ? 'text-emerald-400' : 'text-red-400'
-            }`}
-          >
-            {trend.value >= 0 ? '+' : ''}
-            {trend.value}% {trend.label}
-          </span>
-        )}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-end gap-2">
+          <span className={`text-2xl font-bold text-gray-100 leading-tight ${valueClassName ?? ''}`}>{value}</span>
+          {trend && (
+            <span
+              className={`text-xs font-medium mb-1 ${
+                trend.value >= 0 ? 'text-emerald-400' : 'text-red-400'
+              }`}
+            >
+              {trend.value >= 0 ? '+' : ''}
+              {trend.value}% {trend.label}
+            </span>
+          )}
+        </div>
+        {detail && <span className="text-xs font-medium text-gray-400">{detail}</span>}
       </div>
     </>
   );

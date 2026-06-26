@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import {
   Bug,
   Sprout,
@@ -8,6 +9,7 @@ import {
   ExternalLink,
   HeartHandshake,
   ShieldAlert,
+  Trophy,
 } from 'lucide-react';
 import {
   LineChart,
@@ -23,6 +25,7 @@ import {
 import { StatCard } from '../components/ui/StatCard';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { FormField, SelectInput } from '../components/ui/FormField';
 import type { Beetle, GrowthEntry, Pairing, PestRisk, SpeciesInventory } from '../types';
 import {
   beetleLabel,
@@ -32,6 +35,14 @@ import {
   totalPopulationInventory,
 } from '../types';
 import { beetleCountTrend, larvalActivityTrend } from '../utils/dashboardMetrics';
+import {
+  ALL_SPECIES_FILTER,
+  calcAvgHatchRate,
+  calcTopPerformingSpecies,
+  filterPairingsBySpecies,
+  getBreedingSpeciesOptions,
+  getFertilityRanking,
+} from '../utils/dashboardBreedingMetrics';
 
 interface DashboardProps {
   beetles: Beetle[];
@@ -40,13 +51,6 @@ interface DashboardProps {
   pairings: Pairing[];
   pestRisks: PestRisk[];
   onNavigate: (page: string) => void;
-}
-
-function calcHatchRate(pairings: Pairing[]): number {
-  if (pairings.length === 0) return 0;
-  const total = pairings.reduce((s, p) => s + p.eggsProduced, 0);
-  const hatched = pairings.reduce((s, p) => s + p.hatched, 0);
-  return total === 0 ? 0 : Math.round((hatched / total) * 100);
 }
 
 function calcFertilityScore(pairings: Pairing[]): number {
@@ -89,15 +93,6 @@ function getLarvalGrowthChart(beetles: Beetle[], growthEntries: GrowthEntry[]) {
   return Object.values(data).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function getFertilityRanking(beetles: Beetle[], pairings: Pairing[]) {
-  return pairings
-    .map((p) => ({
-      name: `${beetleLabel(beetles, p.maleBeetleId)} x ${beetleLabel(beetles, p.femaleBeetleId)}`,
-      score: pairingFertilityScore(p),
-    }))
-    .sort((a, b) => b.score - a.score);
-}
-
 const severityVariant = { low: 'warning' as const, medium: 'warning' as const, high: 'danger' as const };
 const problemTypeLabel: Record<string, string> = {
   mites: 'Mites',
@@ -116,27 +111,54 @@ export function Dashboard({
   pestRisks,
   onNavigate,
 }: DashboardProps) {
-  const hasInventory = speciesInventory.length > 0;
+  const [speciesFilter, setSpeciesFilter] = useState(ALL_SPECIES_FILTER);
+
+  const speciesOptions = useMemo(
+    () => getBreedingSpeciesOptions(beetles, pairings),
+    [beetles, pairings]
+  );
+
+  const filteredPairings = useMemo(
+    () => filterPairingsBySpecies(pairings, beetles, speciesFilter),
+    [pairings, beetles, speciesFilter]
+  );
+
+  const filteredBeetles = useMemo(() => {
+    if (speciesFilter === ALL_SPECIES_FILTER) return beetles;
+    return beetles.filter((beetle) => beetle.species === speciesFilter);
+  }, [beetles, speciesFilter]);
+
+  const filteredInventory = useMemo(() => {
+    if (speciesFilter === ALL_SPECIES_FILTER) return speciesInventory;
+    return speciesInventory.filter((row) => row.species === speciesFilter);
+  }, [speciesInventory, speciesFilter]);
+
+  const hasInventory = filteredInventory.length > 0;
   const totalPopulation = hasInventory
-    ? totalPopulationInventory(speciesInventory)
-    : beetles.length;
+    ? totalPopulationInventory(filteredInventory)
+    : filteredBeetles.length;
   const activeLarvae = hasInventory
-    ? totalInstarLarvaeInventory(speciesInventory)
-    : beetles.filter((b) => b.status === 'larva').length;
-  const totalAdults = hasInventory ? totalAdultsInventory(speciesInventory) : beetles.filter((b) => b.status === 'adult').length;
-  const avgHatchRate = calcHatchRate(pairings);
-  const avgFertility = calcFertilityScore(pairings);
-  const growthData = getLarvalGrowthChart(beetles, growthEntries);
-  const fertilityData = getFertilityRanking(beetles, pairings);
-  const totalBeetlesTrend = hasInventory ? null : beetleCountTrend(beetles);
+    ? totalInstarLarvaeInventory(filteredInventory)
+    : filteredBeetles.filter((b) => b.status === 'larva').length;
+  const totalAdults = hasInventory
+    ? totalAdultsInventory(filteredInventory)
+    : filteredBeetles.filter((b) => b.status === 'adult').length;
+  const avgHatchRate = calcAvgHatchRate(filteredPairings);
+  const topPerformingSpecies = calcTopPerformingSpecies(beetles, filteredPairings);
+  const avgFertility = calcFertilityScore(filteredPairings);
+  const growthData = getLarvalGrowthChart(filteredBeetles, growthEntries);
+  const fertilityData = getFertilityRanking(beetles, filteredPairings);
+  const totalBeetlesTrend = hasInventory ? null : beetleCountTrend(filteredBeetles);
   const activeLarvaeTrend =
     hasInventory && activeLarvae === 0 && growthEntries.length === 0
       ? null
-      : larvalActivityTrend(beetles, growthEntries);
+      : larvalActivityTrend(filteredBeetles, growthEntries);
   const openPestRisks = pestRisks.filter((pr) => pr.status === 'open');
-  const recentPairings = [...pairings].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
+  const recentPairings = [...filteredPairings]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 5);
 
-  const topBeetleNames = beetles
+  const topBeetleNames = filteredBeetles
     .filter(
       (b) =>
         growthEntries.some((entry) => entry.beetleId === b.id) ||
@@ -148,7 +170,7 @@ export function Dashboard({
 
   const useBarChart = topBeetleNames.length === 0;
   const chartBeetleNames = useBarChart
-    ? beetles.filter((b) => b.status === 'adult').slice(0, 3).map((b) => b.name)
+    ? filteredBeetles.filter((b) => b.status === 'adult').slice(0, 3).map((b) => b.name)
     : topBeetleNames;
 
   const chartColors = ['#0ea5e9', '#14b8a6', '#f59e0b'];
@@ -156,9 +178,21 @@ export function Dashboard({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-gray-100">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Breeding intelligence overview</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-gray-100">Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Breeding intelligence overview</p>
+        </div>
+        <FormField label="Species" className="w-full sm:w-64">
+          <SelectInput
+            value={speciesFilter}
+            onChange={setSpeciesFilter}
+            options={[
+              { value: ALL_SPECIES_FILTER, label: 'All species' },
+              ...speciesOptions.map((species) => ({ value: species, label: species })),
+            ]}
+          />
+        </FormField>
       </div>
 
       {/* Pest Alert Banner */}
@@ -183,7 +217,7 @@ export function Dashboard({
       )}
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatCard
           label={hasInventory ? 'Total Population' : 'Total Beetles'}
           value={totalPopulation}
@@ -202,9 +236,19 @@ export function Dashboard({
         />
         <StatCard
           label="Avg Hatch Rate"
-          value={`${avgHatchRate}%`}
+          value={avgHatchRate == null ? '--' : `${avgHatchRate}%`}
           icon={Egg}
           color="bg-amber-500/15 text-amber-400"
+        />
+        <StatCard
+          label="Top Performing Species"
+          value={topPerformingSpecies?.species ?? 'No data'}
+          detail={
+            topPerformingSpecies ? `${topPerformingSpecies.hatchRate}% Hatch Rate` : undefined
+          }
+          valueClassName={topPerformingSpecies ? 'text-base sm:text-lg' : undefined}
+          icon={Trophy}
+          color="bg-violet-500/15 text-violet-400"
         />
         <StatCard
           label={hasInventory ? 'Adults' : 'Avg Fertility'}
@@ -268,7 +312,14 @@ export function Dashboard({
 
         {/* Fertility Ranking */}
         <Card>
-          <CardHeader title="Fertility Ranking" subtitle="Pairing performance score" />
+          <CardHeader
+            title="Fertility Ranking"
+            subtitle={
+              speciesFilter === ALL_SPECIES_FILTER
+                ? 'Pairing performance score'
+                : `Pairing performance for ${speciesFilter}`
+            }
+          />
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={fertilityData} layout="vertical">
