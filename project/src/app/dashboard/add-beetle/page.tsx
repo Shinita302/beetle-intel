@@ -28,5 +28,5 @@ export default function AddBeetlePage() {
     if (saved) recordBodyMetricGrowth(saved, previous);
   };
 
-  return <AddBeetle beetles={beetles} onAdd={handleAdd} onUpdate={handleUpdate} />;
+  return <AddBeetle beetles={beetles} growthEntries={growthEntries} onAdd={handleAdd} onUpdate={handleUpdate} />;
 }

@@ -1,4 +1,4 @@
-import type { Beetle, BeetleSex, BeetleStatus } from '@/types';
+import type { Beetle, BeetleSex, BeetleStatus, LarvalInstar } from '@/types';
 import type { DbBeetle, DbBeetleInsert, BeetleProfileMeta } from '@/types/database';
 
 function buildNotesMeta(beetle: Beetle): string {
@@ -6,6 +6,7 @@ function buildNotesMeta(beetle: Beetle): string {
     name: beetle.name,
     sex: beetle.sex,
     status: beetle.status,
+    instarStage: beetle.status === 'larva' ? beetle.instarStage : undefined,
     generation: beetle.generation,
     origin: beetle.origin,
     sizeMm: beetle.sizeMm > 0 ? beetle.sizeMm : undefined,
@@ -45,6 +46,11 @@ export function dbBeetleToBeetle(row: DbBeetle): Beetle {
     species: row.species,
     sex,
     status,
+    instarStage:
+      status === 'larva' &&
+      (meta?.instarStage === 'L1' || meta?.instarStage === 'L2' || meta?.instarStage === 'L3')
+        ? meta.instarStage
+        : undefined,
     generation: meta?.generation ?? '',
     origin: meta?.origin === 'CB' || meta?.origin === 'WC' ? meta.origin : '',
     sizeMm: typeof meta?.sizeMm === 'number' && meta.sizeMm > 0 ? meta.sizeMm : 0,
@@ -68,6 +74,10 @@ export function parseBeetleMeta(notes: string | null): BeetleProfileMeta | null 
       name: parsed.name ?? 'Unnamed',
       sex: parsed.sex,
       status: parsed.status,
+      instarStage:
+        parsed.instarStage === 'L1' || parsed.instarStage === 'L2' || parsed.instarStage === 'L3'
+          ? parsed.instarStage
+          : undefined,
       generation: parsed.generation,
       origin: parsed.origin === 'CB' || parsed.origin === 'WC' ? parsed.origin : '',
       sizeMm: typeof parsed.sizeMm === 'number' && parsed.sizeMm > 0 ? parsed.sizeMm : undefined,

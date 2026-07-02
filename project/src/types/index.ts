@@ -2,6 +2,7 @@ export type BeetleStatus = 'larva' | 'pupa' | 'adult' | 'dead' | 'sold';
 export type BeetleSex = 'male' | 'female' | 'unknown';
 export type BeetleOrigin = 'CB' | 'WC';
 export type GrowthStage = 'Egg' | 'L1' | 'L2' | 'L3' | 'Pre-Pupa' | 'Pupa' | 'Adult';
+export type LarvalInstar = 'L1' | 'L2' | 'L3';
 export type PestProblem = 'mites' | 'mold' | 'dryness' | 'over-wet' | 'smell' | 'unknown';
 export type Severity = 'low' | 'medium' | 'high';
 export type PestStatus = 'open' | 'resolved';
@@ -15,6 +16,8 @@ export interface Beetle {
   species: string;
   sex: BeetleSex;
   status: BeetleStatus;
+  /** Current instar when status is larva — matches Inventory L1/L2/L3 stages. */
+  instarStage?: LarvalInstar;
   generation: string;
   origin: BeetleOrigin | '';
   sizeMm: number;

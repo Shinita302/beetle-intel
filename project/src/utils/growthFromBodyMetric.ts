@@ -1,9 +1,11 @@
-import type { Beetle, BeetleStatus, GrowthEntry, GrowthStage } from '@/types';
+import type { Beetle, BeetleStatus, GrowthEntry, GrowthStage, LarvalInstar } from '@/types';
 import { beetleUsesWeightMetric } from '@/utils/beetleProfileValidation';
 
-function stageForStatus(status: BeetleStatus): GrowthStage | null {
-  if (status === 'larva') return 'L3';
-  if (status === 'pupa') return 'Pupa';
+function stageForBeetle(beetle: Beetle): GrowthStage | null {
+  if (beetle.status === 'larva') {
+    return beetle.instarStage ?? 'L3';
+  }
+  if (beetle.status === 'pupa') return 'Pupa';
   return null;
 }
 
@@ -15,7 +17,7 @@ export function buildGrowthEntryFromBodyMetric(
   if (!beetleUsesWeightMetric(beetle.status)) return null;
   if (!Number.isFinite(beetle.sizeMm) || beetle.sizeMm <= 0) return null;
 
-  const stage = stageForStatus(beetle.status);
+  const stage = stageForBeetle(beetle);
   if (!stage) return null;
 
   return {
@@ -40,6 +42,20 @@ export function shouldRecordBodyMetricGrowth(
   if (!Number.isFinite(next.sizeMm) || next.sizeMm <= 0) return false;
   if (!previous) return true;
   if (previous.sizeMm !== next.sizeMm) return true;
+  if (previous.instarStage !== next.instarStage) return true;
   if (previous.status !== next.status && beetleUsesWeightMetric(next.status)) return true;
   return false;
+}
+
+export function latestLarvalInstarFromGrowth(
+  beetleId: string,
+  growthEntries: GrowthEntry[]
+): LarvalInstar | undefined {
+  const instars: LarvalInstar[] = ['L1', 'L2', 'L3'];
+  const latest = growthEntries
+    .filter((entry) => entry.beetleId === beetleId && instars.includes(entry.stage as LarvalInstar))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))[0];
+
+  if (!latest) return undefined;
+  return latest.stage as LarvalInstar;
 }

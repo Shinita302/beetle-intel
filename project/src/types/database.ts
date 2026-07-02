@@ -1,5 +1,5 @@
 import type { Json } from './database-json';
-import type { BeetleOrigin } from './index';
+import type { BeetleOrigin, LarvalInstar } from './index';
 
 export type { Json };
 
@@ -36,6 +36,7 @@ export interface BeetleProfileMeta {
   status?: string;
   generation?: string;
   origin?: BeetleOrigin | '';
+  instarStage?: LarvalInstar;
   sizeMm?: number;
   color?: string;
   notes?: string;

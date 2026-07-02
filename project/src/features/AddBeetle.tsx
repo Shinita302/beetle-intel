@@ -4,7 +4,7 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { FormField, TextInput, SelectInput, NumberInput } from '../components/ui/FormField';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import type { Beetle, BeetleOrigin, BeetleSex, BeetleStatus } from '../types';
+import type { Beetle, BeetleOrigin, BeetleSex, BeetleStatus, GrowthEntry, LarvalInstar } from '../types';
 import { formatBeetleBodyMetric } from '../utils/beetleProfileValidation';
 import {
   BEETLE_ORIGIN_OPTIONS,
@@ -17,9 +17,11 @@ import {
   normalizeBeetleGeneration,
   normalizeBeetleSizeMm,
 } from '../utils/beetleProfileValidation';
+import { latestLarvalInstarFromGrowth } from '../utils/growthFromBodyMetric';
 
 interface AddBeetleProps {
   beetles: Beetle[];
+  growthEntries?: GrowthEntry[];
   onAdd: (beetle: Beetle) => void | Promise<void>;
   onUpdate: (beetle: Beetle) => void | Promise<void>;
 }
@@ -38,11 +40,18 @@ const sexOptions: { value: BeetleSex; label: string }[] = [
   { value: 'unknown', label: 'Unknown / Unsexed' },
 ];
 
+const instarOptions: { value: LarvalInstar; label: string }[] = [
+  { value: 'L1', label: 'L1' },
+  { value: 'L2', label: 'L2' },
+  { value: 'L3', label: 'L3' },
+];
+
 const emptyForm = {
   name: '',
   species: '',
   sex: 'unknown' as BeetleSex,
   status: 'larva' as BeetleStatus,
+  instarStage: 'L3' as LarvalInstar,
   generation: '',
   origin: '' as BeetleOrigin | '',
   sizeMm: 0,
@@ -55,12 +64,16 @@ const emptyForm = {
 type FormState = typeof emptyForm;
 type FormErrors = Partial<Record<'species' | 'generation' | 'origin' | 'sizeMm' | 'color', string>>;
 
-function beetleToForm(beetle: Beetle): FormState {
+function beetleToForm(beetle: Beetle, growthEntries: GrowthEntry[]): FormState {
   return {
     name: beetle.name,
     species: beetle.species,
     sex: beetle.sex,
     status: beetle.status,
+    instarStage:
+      beetle.instarStage ??
+      latestLarvalInstarFromGrowth(beetle.id, growthEntries) ??
+      'L3',
     generation: beetle.generation,
     origin: beetle.origin,
     sizeMm: beetle.sizeMm,
@@ -90,6 +103,7 @@ function buildBeetleFromForm(form: FormState, id: string, createdAt: string): Be
     species,
     sex: form.sex,
     status: form.status,
+    instarStage: form.status === 'larva' ? form.instarStage : undefined,
     generation: normalizeBeetleGeneration(form.generation),
     origin: form.origin as BeetleOrigin,
     sizeMm: normalizeBeetleSizeMm(form.sizeMm),
@@ -99,6 +113,35 @@ function buildBeetleFromForm(form: FormState, id: string, createdAt: string): Be
     bloodline: form.bloodline.trim(),
     createdAt,
   };
+}
+
+function LarvalInstarField({
+  value,
+  onChange,
+}: {
+  value: LarvalInstar;
+  onChange: (value: LarvalInstar) => void;
+}) {
+  return (
+    <FormField
+      label="Instar"
+      required
+      hint="Same L1 / L2 / L3 stages as Inventory."
+    >
+      <SelectInput
+        value={value}
+        onChange={(v) => onChange(v as LarvalInstar)}
+        options={instarOptions}
+      />
+    </FormField>
+  );
+}
+
+function statusLabel(beetle: Beetle): string {
+  if (beetle.status === 'larva' && beetle.instarStage) {
+    return `${beetle.instarStage} Larva`;
+  }
+  return beetle.status.charAt(0).toUpperCase() + beetle.status.slice(1);
 }
 
 function BeetleBodyMetricField({
@@ -177,7 +220,7 @@ function AdvancedSection({
   );
 }
 
-export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
+export function AddBeetle({ beetles, growthEntries = [], onAdd, onUpdate }: AddBeetleProps) {
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState<FormErrors>({});
   const [saved, setSaved] = useState(false);
@@ -221,7 +264,13 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
   };
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === 'status' && value === 'larva' && prev.status !== 'larva') {
+        next.instarStage = prev.instarStage || 'L3';
+      }
+      return next;
+    });
     if (key === 'status' && errors.sizeMm) clearFieldError('sizeMm', setErrors);
     if (key === 'species' && errors.species) clearFieldError('species', setErrors);
     if (key === 'generation' && errors.generation) clearFieldError('generation', setErrors);
@@ -252,9 +301,9 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
     }
     const beetle = beetles.find((b) => b.id === editBeetleId);
     if (beetle) {
-      setEditForm(beetleToForm(beetle));
+      setEditForm(beetleToForm(beetle, growthEntries));
     }
-  }, [editBeetleId, beetles]);
+  }, [editBeetleId, beetles, growthEntries]);
 
   const beetleSelectOptions = beetles.map((b) => ({
     value: b.id,
@@ -262,7 +311,14 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
   }));
 
   const updateEdit = <K extends keyof FormState>(key: K, value: FormState[K]) => {
-    setEditForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+    setEditForm((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, [key]: value };
+      if (key === 'status' && value === 'larva' && prev.status !== 'larva') {
+        next.instarStage = prev.instarStage || 'L3';
+      }
+      return next;
+    });
     if (key === 'status' && editErrors.sizeMm) clearFieldError('sizeMm', setEditErrors);
     if (key === 'species' && editErrors.species) clearFieldError('species', setEditErrors);
     if (key === 'generation' && editErrors.generation) clearFieldError('generation', setEditErrors);
@@ -317,6 +373,13 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
                 options={statusOptions}
               />
             </FormField>
+
+            {form.status === 'larva' && (
+              <LarvalInstarField
+                value={form.instarStage}
+                onChange={(v) => update('instarStage', v)}
+              />
+            )}
 
             <FormField label="Name / Nickname">
               <TextInput
@@ -425,6 +488,12 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
                       options={statusOptions}
                     />
                   </FormField>
+                  {editForm.status === 'larva' && (
+                    <LarvalInstarField
+                      value={editForm.instarStage}
+                      onChange={(v) => updateEdit('instarStage', v)}
+                    />
+                  )}
                   <FormField label="Name / Nickname">
                     <TextInput value={editForm.name} onChange={(v) => updateEdit('name', v)} />
                   </FormField>
@@ -534,7 +603,7 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
                                   : 'neutral'
                         }
                       >
-                        {b.status}
+                        {statusLabel(b)}
                       </Badge>
                     </td>
                   </tr>
