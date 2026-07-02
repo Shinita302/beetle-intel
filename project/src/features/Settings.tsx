@@ -1,38 +1,50 @@
 import { useState } from 'react';
-import { AlertTriangle, Database, RotateCcw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Database, RotateCcw, Trash2, UserX } from 'lucide-react';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { FormField, TextInput } from '../components/ui/FormField';
 
 interface SettingsProps {
+  userEmail?: string;
   beetleCount: number;
   larvalCount: number;
   pairingCount: number;
   pestCount: number;
   onClearAll: () => void | Promise<void>;
   onRestoreDemo: () => void | Promise<void>;
+  onDeleteAccount: () => void | Promise<void>;
 }
 
-const CONFIRM_PHRASE = 'DELETE ALL';
+const CLEAR_DATA_PHRASE = 'DELETE ALL';
+const DELETE_ACCOUNT_PHRASE = 'DELETE ACCOUNT';
 
 export function Settings({
+  userEmail,
   beetleCount,
   larvalCount,
   pairingCount,
   pestCount,
   onClearAll,
   onRestoreDemo,
+  onDeleteAccount,
 }: SettingsProps) {
   const [confirmText, setConfirmText] = useState('');
+  const [accountConfirmText, setAccountConfirmText] = useState('');
   const [cleared, setCleared] = useState(false);
   const [restored, setRestored] = useState(false);
+  const [accountDeleted, setAccountDeleted] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const totalRecords = beetleCount + larvalCount + pairingCount + pestCount;
-  const canDelete = confirmText.trim().toUpperCase() === CONFIRM_PHRASE;
+  const canClearData = confirmText.trim().toUpperCase() === CLEAR_DATA_PHRASE;
+  const canDeleteAccount = accountConfirmText.trim().toUpperCase() === DELETE_ACCOUNT_PHRASE;
 
   const handleClear = () => {
-    if (!canDelete) return;
+    if (!canClearData) return;
     onClearAll();
     setConfirmText('');
     setCleared(true);
@@ -48,6 +60,24 @@ export function Settings({
     setTimeout(() => setRestored(false), 4000);
   };
 
+  const handleDeleteAccount = async () => {
+    if (!canDeleteAccount) return;
+
+    setDeletingAccount(true);
+    setDeleteAccountError(null);
+
+    try {
+      await onDeleteAccount();
+      setDeleteAccountOpen(false);
+      setAccountConfirmText('');
+      setAccountDeleted(true);
+    } catch (err) {
+      setDeleteAccountError(err instanceof Error ? err.message : 'Could not delete account.');
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
@@ -56,6 +86,39 @@ export function Settings({
           All breeding data syncs to your account and appears on any device after you log in
         </p>
       </div>
+
+      <Card>
+        <CardHeader title="Account" subtitle="Your BeetleIntel login" />
+        <div className="space-y-3">
+          <p className="text-sm text-gray-300">{userEmail || 'Signed in'}</p>
+          <p className="text-xs text-gray-500">
+            Deleting your account permanently removes your login and all synced breeding data.
+          </p>
+          <FormField
+            label={`Type ${DELETE_ACCOUNT_PHRASE} to confirm`}
+            hint="Case insensitive"
+          >
+            <TextInput
+              value={accountConfirmText}
+              onChange={setAccountConfirmText}
+              placeholder={DELETE_ACCOUNT_PHRASE}
+            />
+          </FormField>
+          <Button
+            type="button"
+            variant="danger"
+            onClick={() => {
+              setDeleteAccountError(null);
+              setDeleteAccountOpen(true);
+            }}
+            disabled={!canDeleteAccount || deletingAccount}
+          >
+            <UserX className="w-4 h-4" />
+            Delete account
+          </Button>
+          {accountDeleted && <Badge variant="success">Account deleted</Badge>}
+        </div>
+      </Card>
 
       <Card>
         <CardHeader
@@ -76,24 +139,24 @@ export function Settings({
       <Card>
         <CardHeader
           title="Delete all breeding data"
-          subtitle="Removes beetles, growth records, pairings, pest logs, and growth-track overrides"
+          subtitle="Removes beetles, growth records, pairings, pest logs, and inventory — keeps your login"
         />
 
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 mb-4">
           <p className="text-sm text-amber-200 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            This cannot be undone. Data is only stored in your browser — there is no cloud backup.
+            This cannot be undone. Your account stays active — only the breeding data is removed.
           </p>
         </div>
 
         <FormField
-          label={`Type ${CONFIRM_PHRASE} to confirm`}
+          label={`Type ${CLEAR_DATA_PHRASE} to confirm`}
           hint="Case insensitive"
         >
           <TextInput
             value={confirmText}
             onChange={setConfirmText}
-            placeholder={CONFIRM_PHRASE}
+            placeholder={CLEAR_DATA_PHRASE}
           />
         </FormField>
 
@@ -102,7 +165,7 @@ export function Settings({
             type="button"
             variant="primary"
             onClick={handleClear}
-            disabled={!canDelete}
+            disabled={!canClearData}
             className="!bg-red-600 hover:!bg-red-500 disabled:!bg-gray-800 disabled:!text-gray-600"
           >
             <Trash2 className="w-4 h-4" />
@@ -131,6 +194,21 @@ export function Settings({
         <Database className="w-3.5 h-3.5" />
         Breeding data is stored in your Supabase account and syncs across browsers when you log in.
       </p>
+
+      <ConfirmDialog
+        open={deleteAccountOpen}
+        title="Delete your account?"
+        message="This permanently deletes your login, beetles, growth logs, inventory, pairings, and pest notes. This cannot be undone."
+        confirmLabel={deletingAccount ? 'Deleting…' : 'Delete account'}
+        confirmVariant="danger"
+        onConfirm={handleDeleteAccount}
+        onCancel={() => {
+          if (deletingAccount) return;
+          setDeleteAccountOpen(false);
+          setDeleteAccountError(null);
+        }}
+        error={deleteAccountError}
+      />
     </div>
   );
 }
