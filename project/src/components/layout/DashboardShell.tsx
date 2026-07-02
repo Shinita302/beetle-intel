@@ -59,7 +59,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <p className="text-xs text-sky-400/90 mb-2">Saving…</p>
             )}
             {dataError && (
-              <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              <div
+                className={`rounded-lg border px-3 py-2 text-sm ${
+                  dataError.includes('002_user_breeding_data')
+                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                    : 'border-red-500/40 bg-red-500/10 text-red-300'
+                }`}
+              >
                 {dataError}
               </div>
             )}

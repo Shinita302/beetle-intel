@@ -197,7 +197,7 @@ export function BeetleAppProvider({
   }, [beetles, growthEntries]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !breedingSyncEnabled) return;
 
     const timer = window.setTimeout(async () => {
       if (skipSyncRef.current) {
@@ -213,7 +213,9 @@ export function BeetleAppProvider({
           pairings,
           pestRisks,
         });
-        setDataError((prev) => (prev.includes('upload local data') ? prev : ''));
+        setDataError((prev) =>
+          prev.includes('002_user_breeding_data') || prev.includes('upload local data') ? prev : ''
+        );
       } catch (err) {
         setDataError(
           err instanceof Error ? err.message : 'Could not save breeding data to your account.'
@@ -368,6 +370,7 @@ export function BeetleAppProvider({
       pairings,
       pestRisks,
       dataError,
+      breedingSyncEnabled,
       busy,
       addBeetle,
       updateBeetle,
@@ -407,6 +410,7 @@ export function BeetleAppProvider({
       pairings,
       pestRisks,
       dataError,
+      breedingSyncEnabled,
       busy,
       addBeetle,
       updateBeetle,
