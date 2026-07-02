@@ -53,14 +53,14 @@ export function Settings({
       <div>
         <h1 className="text-xl font-bold text-gray-100">Settings</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Beetles sync to your account; growth logs, pairings, and pest notes stay in this browser
+          All breeding data syncs to your account and appears on any device after you log in
         </p>
       </div>
 
       <Card>
         <CardHeader
           title="Your data"
-          subtitle="Beetles in Supabase; other records in localStorage on this device"
+          subtitle="Beetles, growth logs, inventory, pairings, and pest notes in Supabase"
         />
         <div className="flex flex-wrap gap-2">
           <Badge variant="info">{beetleCount} beetles</Badge>
@@ -129,7 +129,7 @@ export function Settings({
 
       <p className="text-[11px] text-gray-600 flex items-center gap-1.5">
         <Database className="w-3.5 h-3.5" />
-        Data never leaves your computer unless you export it yourself.
+        Breeding data is stored in your Supabase account and syncs across browsers when you log in.
       </p>
     </div>
   );

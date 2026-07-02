@@ -8,19 +8,24 @@ import {
   insertBeetlesForUser,
   updateBeetleForUser,
 } from '@/lib/beetles';
+import {
+  deleteUserBreedingData,
+  hasBreedingData,
+  normalizeUserBreedingData,
+  upsertUserBreedingData,
+  type UserBreedingData,
+} from '@/lib/userBreedingData';
 import { createClient } from '@/lib/supabase/client';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { STORAGE_KEYS, userStorageKey } from '@/constants/storageKeys';
 import { pageToPath } from '@/lib/dashboardRoutes';
 import { clearAllAppDataFromStorage } from '@/utils/clearAppData';
 import {
   migrateDbRowsToSpeciesInventory,
   mergeSpeciesInventory,
-  normalizeGrowthEntries,
   normalizePairings,
   normalizeSpeciesInventory,
 } from '@/utils/migrateLegacyData';
 import { remapGrowthEntriesToSavedBeetles, repairGrowthEntryBeetleIds } from '@/utils/importGrowthSheet';
+import { readLegacyLocalAppData } from '@/utils/readLegacyLocalAppData';
 import {
   mockBeetles,
   mockGrowthEntries,
@@ -34,6 +39,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -75,91 +81,140 @@ interface BeetleAppProviderProps {
   userId: string;
   userEmail: string | undefined;
   initialDbBeetles: DbBeetle[];
+  initialBreedingData: UserBreedingData;
   children: ReactNode;
 }
 
-function readLegacyGrowthEntries(userId: string): GrowthEntry[] {
-  if (typeof window === 'undefined') return [];
-  const growthKey = userStorageKey(STORAGE_KEYS.growthEntries, userId);
-  const stored = window.localStorage.getItem(growthKey);
-  if (stored) {
-    try {
-      return normalizeGrowthEntries(JSON.parse(stored));
-    } catch {
-      return [];
-    }
-  }
+const SYNC_DEBOUNCE_MS = 800;
 
-  const legacyKey = userStorageKey(STORAGE_KEYS.larvalRecords, userId);
-  const legacy = window.localStorage.getItem(legacyKey);
-  if (!legacy) return [];
-  try {
-    return normalizeGrowthEntries(JSON.parse(legacy));
-  } catch {
-    return [];
-  }
-}
-
-function readLegacyPairings(userId: string): Pairing[] {
-  if (typeof window === 'undefined') return [];
-  const key = userStorageKey(STORAGE_KEYS.pairings, userId);
-  const stored = window.localStorage.getItem(key);
-  if (!stored) return [];
-  try {
-    return normalizePairings(JSON.parse(stored));
-  } catch {
-    return [];
-  }
-}
-
-export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, children }: BeetleAppProviderProps) {
+export function BeetleAppProvider({
+  userId,
+  userEmail,
+  initialDbBeetles,
+  initialBreedingData,
+  children,
+}: BeetleAppProviderProps) {
   const router = useRouter();
+  const normalizedInitial = useMemo(
+    () => normalizeUserBreedingData(initialBreedingData),
+    [initialBreedingData]
+  );
+
   const [beetles, setBeetles] = useState<Beetle[]>(() => dbBeetlesToBeetles(initialDbBeetles));
   const [dataError, setDataError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const skipSyncRef = useRef(true);
+  const migratedLocalRef = useRef(false);
 
-  const [growthEntries, setGrowthEntries] = useLocalStorage<GrowthEntry[]>(
-    userStorageKey(STORAGE_KEYS.growthEntries, userId),
-    []
-  );
-  const [speciesInventory, setSpeciesInventory] = useLocalStorage<SpeciesInventory[]>(
-    userStorageKey(STORAGE_KEYS.speciesInventory, userId),
-    []
-  );
-  const [pairings, setPairings] = useLocalStorage<Pairing[]>(
-    userStorageKey(STORAGE_KEYS.pairings, userId),
-    []
-  );
-  const [pestRisks, setPestRisks] = useLocalStorage<PestRisk[]>(
-    userStorageKey(STORAGE_KEYS.pestRisks, userId),
-    []
-  );
+  const [growthEntries, setGrowthEntries] = useState(normalizedInitial.growthEntries);
+  const [speciesInventory, setSpeciesInventory] = useState(normalizedInitial.speciesInventory);
+  const [pairings, setPairings] = useState(normalizedInitial.pairings);
+  const [pestRisks, setPestRisks] = useState(normalizedInitial.pestRisks);
 
   useEffect(() => {
-    if (growthEntries.length === 0) {
-      const migrated = readLegacyGrowthEntries(userId);
-      if (migrated.length > 0) {
-        setGrowthEntries(migrated);
+    let cancelled = false;
+
+    async function hydrateFromLocalStorage() {
+      if (migratedLocalRef.current) return;
+      if (hasBreedingData(normalizedInitial)) {
+        setHydrated(true);
+        return;
+      }
+
+      const local = readLegacyLocalAppData(userId);
+      if (!hasBreedingData(local)) {
+        setSpeciesInventory((prev) => migrateDbRowsToSpeciesInventory(initialDbBeetles, prev));
+        setHydrated(true);
+        return;
+      }
+
+      migratedLocalRef.current = true;
+      skipSyncRef.current = true;
+
+      const inventory = mergeSpeciesInventory(
+        migrateDbRowsToSpeciesInventory(initialDbBeetles, local.speciesInventory),
+        local.speciesInventory
+      );
+
+      setGrowthEntries(local.growthEntries);
+      setSpeciesInventory(inventory);
+      setPairings(normalizePairings(local.pairings as unknown[]));
+      setPestRisks(local.pestRisks);
+
+      try {
+        const supabase = createClient();
+        await upsertUserBreedingData(supabase, userId, {
+          growthEntries: local.growthEntries,
+          speciesInventory: inventory,
+          pairings: local.pairings,
+          pestRisks: local.pestRisks,
+        });
+        clearAllAppDataFromStorage(userId);
+      } catch (err) {
+        if (!cancelled) {
+          setDataError(
+            err instanceof Error
+              ? err.message
+              : 'Could not upload local data to your account. Data remains on this device only.'
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          skipSyncRef.current = false;
+          setHydrated(true);
+        }
       }
     }
-    if (pairings.length > 0) {
-      setPairings((prev) => normalizePairings(prev as unknown[]));
-    } else {
-      const migrated = readLegacyPairings(userId);
-      if (migrated.length > 0) {
-        setPairings(migrated);
-      }
+
+    hydrateFromLocalStorage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, normalizedInitial, initialDbBeetles]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (speciesInventory.length === 0 && initialDbBeetles.length > 0) {
+      setSpeciesInventory((prev) => migrateDbRowsToSpeciesInventory(initialDbBeetles, prev));
     }
-    setSpeciesInventory((prev) => migrateDbRowsToSpeciesInventory(initialDbBeetles, prev));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [hydrated, speciesInventory.length, initialDbBeetles]);
 
   useEffect(() => {
     if (beetles.length === 0 || growthEntries.length === 0) return;
     const repaired = repairGrowthEntryBeetleIds(beetles, growthEntries);
     const changed = repaired.some((entry, index) => entry.beetleId !== growthEntries[index]?.beetleId);
     if (changed) setGrowthEntries(repaired);
-  }, [beetles, growthEntries, setGrowthEntries]);
+  }, [beetles, growthEntries]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const timer = window.setTimeout(async () => {
+      if (skipSyncRef.current) {
+        skipSyncRef.current = false;
+        return;
+      }
+
+      try {
+        const supabase = createClient();
+        await upsertUserBreedingData(supabase, userId, {
+          growthEntries,
+          speciesInventory,
+          pairings,
+          pestRisks,
+        });
+        setDataError((prev) => (prev.includes('upload local data') ? prev : ''));
+      } catch (err) {
+        setDataError(
+          err instanceof Error ? err.message : 'Could not save breeding data to your account.'
+        );
+      }
+    }, SYNC_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [growthEntries, speciesInventory, pairings, pestRisks, userId, hydrated]);
 
   const run = useCallback(async (fn: () => Promise<void>) => {
     setDataError('');
@@ -173,6 +228,16 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
       setBusy(false);
     }
   }, [router]);
+
+  const syncBreedingDataNow = useCallback(
+    async (data: UserBreedingData) => {
+      const supabase = createClient();
+      skipSyncRef.current = true;
+      await upsertUserBreedingData(supabase, userId, data);
+      skipSyncRef.current = false;
+    },
+    [userId]
+  );
 
   const addBeetle = useCallback(
     async (beetle: Beetle) => {
@@ -224,35 +289,47 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
 
         const beetlesForLinking = savedBeetles.length > 0 ? [...savedBeetles, ...beetles] : beetles;
 
+        let nextGrowth = growthEntries;
         if (growthEntriesToStore.length > 0) {
           const linkedNew = repairGrowthEntryBeetleIds(beetlesForLinking, growthEntriesToStore);
-          setGrowthEntries((prev) => {
-            const merged = [...linkedNew, ...prev];
-            return repairGrowthEntryBeetleIds(beetlesForLinking, merged);
-          });
+          nextGrowth = repairGrowthEntryBeetleIds(beetlesForLinking, [...linkedNew, ...growthEntries]);
+          setGrowthEntries(nextGrowth);
         }
 
+        let nextInventory = speciesInventory;
         if (payload.speciesInventory && payload.speciesInventory.length > 0) {
-          setSpeciesInventory((prev) => mergeSpeciesInventory(prev, payload.speciesInventory!));
+          nextInventory = mergeSpeciesInventory(speciesInventory, payload.speciesInventory);
+          setSpeciesInventory(nextInventory);
         }
+
+        await syncBreedingDataNow({
+          growthEntries: nextGrowth,
+          speciesInventory: nextInventory,
+          pairings,
+          pestRisks,
+        });
+
         router.push('/dashboard');
       });
     },
-    [run, userId, beetles, setGrowthEntries, setSpeciesInventory, router]
+    [run, userId, beetles, growthEntries, speciesInventory, pairings, pestRisks, syncBreedingDataNow, router]
   );
 
   const clearAllData = useCallback(async () => {
     await run(async () => {
       const supabase = createClient();
       await deleteAllBeetlesForUser(supabase, userId);
+      await deleteUserBreedingData(supabase, userId);
+      skipSyncRef.current = true;
       setBeetles([]);
       setGrowthEntries([]);
       setSpeciesInventory([]);
       setPairings([]);
       setPestRisks([]);
       clearAllAppDataFromStorage(userId);
+      skipSyncRef.current = false;
     });
-  }, [run, userId, setGrowthEntries, setSpeciesInventory, setPairings, setPestRisks]);
+  }, [run, userId]);
 
   const restoreDemoData = useCallback(async () => {
     await run(async () => {
@@ -264,8 +341,14 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
       setSpeciesInventory(mockSpeciesInventory);
       setPairings(mockPairings);
       setPestRisks(mockPestRisks);
+      await syncBreedingDataNow({
+        growthEntries: mockGrowthEntries,
+        speciesInventory: mockSpeciesInventory,
+        pairings: mockPairings,
+        pestRisks: mockPestRisks,
+      });
     });
-  }, [run, userId, setGrowthEntries, setSpeciesInventory, setPairings, setPestRisks]);
+  }, [run, userId, syncBreedingDataNow]);
 
   const value = useMemo<BeetleAppContextValue>(
     () => ({
@@ -319,10 +402,6 @@ export function BeetleAppProvider({ userId, userEmail, initialDbBeetles, childre
       busy,
       addBeetle,
       updateBeetle,
-      setGrowthEntries,
-      setSpeciesInventory,
-      setPairings,
-      setPestRisks,
       importData,
       clearAllData,
       restoreDemoData,

@@ -21,6 +21,15 @@ export interface DbBeetleInsert {
   notes?: string | null;
 }
 
+export interface DbUserBreedingData {
+  user_id: string;
+  growth_entries: Json;
+  species_inventory: Json;
+  pairings: Json;
+  pest_risks: Json;
+  updated_at: string;
+}
+
 export interface BeetleProfileMeta {
   name: string;
   sex?: string;
@@ -71,6 +80,27 @@ export interface Database {
             foreignKeyName: 'beetles_user_id_fkey';
             columns: ['user_id'];
             isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      user_breeding_data: {
+        Row: DbUserBreedingData;
+        Insert: {
+          user_id: string;
+          growth_entries?: Json;
+          species_inventory?: Json;
+          pairings?: Json;
+          pest_risks?: Json;
+          updated_at?: string;
+        };
+        Update: Partial<Omit<DbUserBreedingData, 'user_id'>>;
+        Relationships: [
+          {
+            foreignKeyName: 'user_breeding_data_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: true;
             referencedRelation: 'users';
             referencedColumns: ['id'];
           },

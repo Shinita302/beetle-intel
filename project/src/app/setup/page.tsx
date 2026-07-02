@@ -44,11 +44,19 @@ export default function SetupPage() {
             for local dev only
           </li>
           <li>
-            Run the SQL in{' '}
-            <code className="text-amber-200/90 bg-gray-800 px-1.5 py-0.5 rounded text-xs">
-              supabase/migrations/001_beetles_rls.sql
-            </code>{' '}
-            in the Supabase SQL Editor
+            Run the SQL migrations in the Supabase SQL Editor:
+            <ul className="list-disc list-inside mt-1.5 space-y-1 text-gray-400">
+              <li>
+                <code className="text-amber-200/90 bg-gray-800 px-1.5 py-0.5 rounded text-xs">
+                  supabase/migrations/001_beetles_rls.sql
+                </code>
+              </li>
+              <li>
+                <code className="text-amber-200/90 bg-gray-800 px-1.5 py-0.5 rounded text-xs">
+                  supabase/migrations/002_user_breeding_data.sql
+                </code>
+              </li>
+            </ul>
           </li>
           <li>
             Restart the dev server:{' '}
