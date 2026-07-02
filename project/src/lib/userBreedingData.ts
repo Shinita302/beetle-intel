@@ -25,7 +25,7 @@ export function normalizeUserBreedingData(raw: Partial<UserBreedingData> | null 
   if (!raw) return { ...EMPTY_USER_BREEDING_DATA };
   return {
     growthEntries: normalizeGrowthEntries((raw.growthEntries ?? []) as unknown[]),
-    speciesInventory: normalizeSpeciesInventory((raw.speciesInventory ?? []) as unknown[]),
+    speciesInventory: normalizeSpeciesInventory((raw.speciesInventory ?? []) as SpeciesInventory[]),
     pairings: normalizePairings((raw.pairings ?? []) as unknown[]),
     pestRisks: Array.isArray(raw.pestRisks) ? (raw.pestRisks as PestRisk[]) : [],
   };
