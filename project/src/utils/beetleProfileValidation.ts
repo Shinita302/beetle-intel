@@ -79,3 +79,26 @@ export function formatBeetleSizeMm(sizeMm: number): string {
   const rounded = Number.isInteger(sizeMm) ? String(sizeMm) : sizeMm.toFixed(1);
   return `${rounded} mm`;
 }
+
+const MAX_BEETLE_WEIGHT_G = 500;
+
+export function beetleUsesWeightMetric(status: string): boolean {
+  return status === 'larva' || status === 'pupa';
+}
+
+export function beetleBodyMetricError(value: number, status: string): string | undefined {
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  if (beetleUsesWeightMetric(status)) {
+    if (value > MAX_BEETLE_WEIGHT_G) {
+      return `Weight must be ${MAX_BEETLE_WEIGHT_G} g or less.`;
+    }
+    return undefined;
+  }
+  return beetleSizeMmError(value);
+}
+
+export function formatBeetleBodyMetric(beetle: { status: string; sizeMm: number }): string {
+  if (!Number.isFinite(beetle.sizeMm) || beetle.sizeMm <= 0) return '—';
+  const rounded = Number.isInteger(beetle.sizeMm) ? String(beetle.sizeMm) : beetle.sizeMm.toFixed(1);
+  return beetleUsesWeightMetric(beetle.status) ? `${rounded} g` : `${rounded} mm`;
+}

@@ -169,7 +169,9 @@ export function beetleProfileDetails(beetle: Beetle): string {
   const parts: string[] = [];
   if (beetle.sizeMm > 0) {
     const rounded = Number.isInteger(beetle.sizeMm) ? String(beetle.sizeMm) : beetle.sizeMm.toFixed(1);
-    parts.push(`${rounded} mm`);
+    parts.push(
+      beetle.status === 'larva' || beetle.status === 'pupa' ? `${rounded} g` : `${rounded} mm`
+    );
   }
   if (beetle.color.trim()) {
     parts.push(beetle.color.trim());

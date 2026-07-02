@@ -5,13 +5,14 @@ import { FormField, TextInput, SelectInput, NumberInput } from '../components/ui
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import type { Beetle, BeetleOrigin, BeetleSex, BeetleStatus } from '../types';
-import { formatBeetleSizeMm } from '../utils/beetleProfileValidation';
+import { formatBeetleBodyMetric } from '../utils/beetleProfileValidation';
 import {
   BEETLE_ORIGIN_OPTIONS,
+  beetleBodyMetricError,
   beetleColorError,
   beetleGenerationError,
   beetleOriginError,
-  beetleSizeMmError,
+  beetleUsesWeightMetric,
   normalizeBeetleColor,
   normalizeBeetleGeneration,
   normalizeBeetleSizeMm,
@@ -100,6 +101,41 @@ function buildBeetleFromForm(form: FormState, id: string, createdAt: string): Be
   };
 }
 
+function BeetleBodyMetricField({
+  status,
+  value,
+  error,
+  onChange,
+}: {
+  status: BeetleStatus;
+  value: number;
+  error?: string;
+  onChange: (value: number) => void;
+}) {
+  const usesWeight = beetleUsesWeightMetric(status);
+
+  return (
+    <FormField
+      label={usesWeight ? 'Weight (g)' : 'Size (mm)'}
+      error={error}
+      hint={
+        usesWeight
+          ? 'Current body weight in grams — most useful for larvae and pupae.'
+          : 'Body length in millimeters for adult beetles.'
+      }
+    >
+      <NumberInput
+        value={value}
+        onChange={onChange}
+        placeholder={usesWeight ? '35' : '68'}
+        min={0}
+        max={usesWeight ? 500 : 300}
+        step={0.1}
+      />
+    </FormField>
+  );
+}
+
 function AdvancedSection({
   form,
   onChange,
@@ -166,7 +202,7 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
     if (originError) {
       next.origin = originError;
     }
-    const sizeError = beetleSizeMmError(state.sizeMm);
+    const sizeError = beetleBodyMetricError(state.sizeMm, state.status);
     if (sizeError) {
       next.sizeMm = sizeError;
     }
@@ -186,6 +222,7 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    if (key === 'status' && errors.sizeMm) clearFieldError('sizeMm', setErrors);
     if (key === 'species' && errors.species) clearFieldError('species', setErrors);
     if (key === 'generation' && errors.generation) clearFieldError('generation', setErrors);
     if (key === 'origin' && errors.origin) clearFieldError('origin', setErrors);
@@ -226,6 +263,7 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
 
   const updateEdit = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setEditForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+    if (key === 'status' && editErrors.sizeMm) clearFieldError('sizeMm', setEditErrors);
     if (key === 'species' && editErrors.species) clearFieldError('species', setEditErrors);
     if (key === 'generation' && editErrors.generation) clearFieldError('generation', setEditErrors);
     if (key === 'origin' && editErrors.origin) clearFieldError('origin', setEditErrors);
@@ -315,20 +353,12 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
               />
             </FormField>
 
-            <FormField
-              label="Size (mm)"
+            <BeetleBodyMetricField
+              status={form.status}
+              value={form.sizeMm}
               error={errors.sizeMm}
-              hint="Primarily for adult beetles — body length in millimeters."
-            >
-              <NumberInput
-                value={form.sizeMm}
-                onChange={(v) => update('sizeMm', v)}
-                placeholder="68"
-                min={0}
-                max={300}
-                step={0.1}
-              />
-            </FormField>
+              onChange={(v) => update('sizeMm', v)}
+            />
 
             <FormField label="Color" error={errors.color}>
               <TextInput
@@ -422,20 +452,12 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
                       invalid={Boolean(editErrors.origin)}
                     />
                   </FormField>
-                  <FormField
-                    label="Size (mm)"
+                  <BeetleBodyMetricField
+                    status={editForm.status}
+                    value={editForm.sizeMm}
                     error={editErrors.sizeMm}
-                    hint="Primarily for adult beetles — body length in millimeters."
-                  >
-                    <NumberInput
-                      value={editForm.sizeMm}
-                      onChange={(v) => updateEdit('sizeMm', v)}
-                      placeholder="68"
-                      min={0}
-                      max={300}
-                      step={0.1}
-                    />
-                  </FormField>
+                    onChange={(v) => updateEdit('sizeMm', v)}
+                  />
                   <FormField label="Color" error={editErrors.color}>
                     <TextInput
                       value={editForm.color}
@@ -480,7 +502,7 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
                   <th className="text-left py-2 text-gray-500 font-medium">Sex</th>
                   <th className="text-left py-2 text-gray-500 font-medium">Gen</th>
                   <th className="text-left py-2 text-gray-500 font-medium">Origin</th>
-                  <th className="text-left py-2 text-gray-500 font-medium">Size</th>
+                  <th className="text-left py-2 text-gray-500 font-medium">Size / Weight</th>
                   <th className="text-left py-2 text-gray-500 font-medium">Color</th>
                   <th className="text-left py-2 text-gray-500 font-medium">Status</th>
                 </tr>
@@ -496,7 +518,7 @@ export function AddBeetle({ beetles, onAdd, onUpdate }: AddBeetleProps) {
                     </td>
                     <td className="py-2 text-gray-400">{b.generation || '—'}</td>
                     <td className="py-2 text-gray-400">{b.origin || '—'}</td>
-                    <td className="py-2 text-gray-400">{formatBeetleSizeMm(b.sizeMm)}</td>
+                    <td className="py-2 text-gray-400">{formatBeetleBodyMetric(b)}</td>
                     <td className="py-2 text-gray-400 max-w-[120px] truncate">{b.color || '—'}</td>
                     <td className="py-2">
                       <Badge
