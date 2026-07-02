@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Pin workspace root so Tailwind/CSS resolve from this app (not ~/package-lock.json).
   outputFileTracingRoot: projectDir,
+  env: {
+    NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV ?? 'development',
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },

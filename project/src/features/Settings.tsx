@@ -5,6 +5,7 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { FormField, TextInput } from '../components/ui/FormField';
+import { BillingPanel } from '../components/billing/BillingPanel';
 
 interface SettingsProps {
   userEmail?: string;
@@ -86,6 +87,8 @@ export function Settings({
           All breeding data syncs to your account and appears on any device after you log in
         </p>
       </div>
+
+      <BillingPanel />
 
       <Card>
         <CardHeader title="Account" subtitle="Your BeetleIntel login" />

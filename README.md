@@ -62,3 +62,9 @@ npm run preview
 ```
 
 Built files go to `project\dist\`.
+
+## 5. Beta production vs Stripe staging
+
+Beta users use **https://beetle-intel.vercel.app** (`main` branch). Stripe and new features are developed on **`stripe-test`** with Vercel Preview deployments.
+
+See **[project/docs/BETA_AND_STAGING.md](project/docs/BETA_AND_STAGING.md)** for branch workflow, environment variables, and how to merge without disrupting beta testers.
