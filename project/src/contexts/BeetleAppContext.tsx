@@ -55,7 +55,6 @@ interface BeetleAppContextValue {
   pairings: Pairing[];
   pestRisks: PestRisk[];
   dataError: string;
-  breedingSyncEnabled: boolean;
   busy: boolean;
   addBeetle: (beetle: Beetle) => Promise<void>;
   updateBeetle: (beetle: Beetle) => Promise<void>;
@@ -370,7 +369,6 @@ export function BeetleAppProvider({
       pairings,
       pestRisks,
       dataError,
-      breedingSyncEnabled,
       busy,
       addBeetle,
       updateBeetle,
@@ -410,7 +408,6 @@ export function BeetleAppProvider({
       pairings,
       pestRisks,
       dataError,
-      breedingSyncEnabled,
       busy,
       addBeetle,
       updateBeetle,
