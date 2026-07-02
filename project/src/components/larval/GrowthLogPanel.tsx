@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Save } from 'lucide-react';
+import { Pencil, Save, Trash2, X } from 'lucide-react';
 import {
   CartesianGrid,
   Line,
@@ -23,6 +23,8 @@ interface GrowthLogPanelProps {
   beetles: Beetle[];
   growthEntries: GrowthEntry[];
   onAddEntry: (entry: GrowthEntry) => void;
+  onUpdateEntry: (entry: GrowthEntry) => void;
+  onDeleteEntry: (id: string) => void;
 }
 
 const stageOptions: { value: GrowthStage; label: string }[] = [
@@ -35,7 +37,65 @@ const stageOptions: { value: GrowthStage; label: string }[] = [
   { value: 'Adult', label: 'Adult' },
 ];
 
+type GrowthEntryFormState = {
+  date: string;
+  stage: GrowthStage;
+  weight: number;
+  temperature: number;
+  humidity: number;
+  substrateSelection: string;
+  substrateCustom: string;
+  notes: string;
+};
+
 const defaultSubstrate = parseSubstrateType('Flake Soil');
+
+function emptyForm(): GrowthEntryFormState {
+  return {
+    date: new Date().toISOString().slice(0, 10),
+    stage: 'L1',
+    weight: 0,
+    temperature: 0,
+    humidity: 0,
+    substrateSelection: defaultSubstrate.selection,
+    substrateCustom: defaultSubstrate.customValue,
+    notes: '',
+  };
+}
+
+function entryToForm(entry: GrowthEntry): GrowthEntryFormState {
+  const substrate = parseSubstrateType(entry.substrate);
+  return {
+    date: entry.date,
+    stage: entry.stage,
+    weight: entry.weight,
+    temperature: entry.temperature,
+    humidity: entry.humidity,
+    substrateSelection: substrate.selection,
+    substrateCustom: substrate.customValue,
+    notes: entry.notes,
+  };
+}
+
+function buildEntryFromForm(
+  form: GrowthEntryFormState,
+  beetleId: string,
+  id: string,
+  createdAt: string
+): GrowthEntry {
+  return {
+    id,
+    beetleId,
+    date: form.date,
+    stage: form.stage,
+    weight: form.weight,
+    temperature: form.temperature,
+    humidity: form.humidity,
+    substrate: resolveSubstrateType(form.substrateSelection, form.substrateCustom),
+    notes: form.notes.trim(),
+    createdAt,
+  };
+}
 
 function formatDisplayDate(date: string): string {
   const parsed = new Date(date);
@@ -43,19 +103,94 @@ function formatDisplayDate(date: string): string {
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLogPanelProps) {
+function GrowthEntryFields({
+  form,
+  onChange,
+}: {
+  form: GrowthEntryFormState;
+  onChange: (next: GrowthEntryFormState) => void;
+}) {
+  const update = <K extends keyof GrowthEntryFormState>(key: K, value: GrowthEntryFormState[K]) => {
+    onChange({ ...form, [key]: value });
+  };
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <FormField label="Date" required>
+        <TextInput type="date" value={form.date} onChange={(v) => update('date', v)} required />
+      </FormField>
+      <FormField label="Stage" required>
+        <SelectInput
+          value={form.stage}
+          onChange={(v) => update('stage', v as GrowthStage)}
+          options={stageOptions}
+        />
+      </FormField>
+      <FormField label="Weight (g)" required>
+        <NumberInput
+          value={form.weight}
+          onChange={(v) => update('weight', v)}
+          step={0.1}
+          min={0}
+          required
+        />
+      </FormField>
+      <FormField label="Temperature (°C)">
+        <NumberInput
+          value={form.temperature}
+          onChange={(v) => update('temperature', v)}
+          step={0.5}
+          min={0}
+          max={40}
+        />
+      </FormField>
+      <FormField label="Humidity (%)">
+        <NumberInput
+          value={form.humidity}
+          onChange={(v) => update('humidity', v)}
+          step={1}
+          min={0}
+          max={100}
+        />
+      </FormField>
+      <div className="md:col-span-2">
+        <SubstrateTypeField
+          selection={form.substrateSelection}
+          customValue={form.substrateCustom}
+          onSelectionChange={(v) => update('substrateSelection', v)}
+          onCustomChange={(v) => update('substrateCustom', v)}
+        />
+      </div>
+      <FormField label="Notes" className="md:col-span-2">
+        <textarea
+          value={form.notes}
+          onChange={(e) => update('notes', e.target.value)}
+          placeholder="Observations, health notes…"
+          rows={2}
+          className="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:ring-1 focus:ring-sky-500/50 resize-none"
+        />
+      </FormField>
+    </div>
+  );
+}
+
+export function GrowthLogPanel({
+  beetles,
+  growthEntries,
+  onAddEntry,
+  onUpdateEntry,
+  onDeleteEntry,
+}: GrowthLogPanelProps) {
   const [selectedBeetleId, setSelectedBeetleId] = useState('');
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [addForm, setAddForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState<GrowthEntryFormState | null>(null);
   const [saved, setSaved] = useState(false);
-  const [form, setForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
-    stage: 'L1' as GrowthStage,
-    weight: 0,
-    temperature: 0,
-    humidity: 0,
-    substrateSelection: defaultSubstrate.selection,
-    substrateCustom: defaultSubstrate.customValue,
-    notes: '',
-  });
+
+  const editingEntry = useMemo(
+    () => growthEntries.find((entry) => entry.id === editingEntryId) ?? null,
+    [growthEntries, editingEntryId]
+  );
 
   const beetlesWithGrowth = useMemo(
     () => beetlesWithGrowthData(beetles, growthEntries),
@@ -97,31 +232,51 @@ export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLog
 
   const nextId = `GE-${String(growthEntries.length + 1).padStart(3, '0')}`;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const flashSaved = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const closeEdit = () => {
+    setEditingEntryId(null);
+    setEditForm(null);
+  };
+
+  const openEdit = (entry: GrowthEntry) => {
+    setEditingEntryId(entry.id);
+    setEditForm(entryToForm(entry));
+    setSaved(false);
+  };
+
+  const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBeetleId) return;
 
-    const entry: GrowthEntry = {
-      id: nextId,
-      beetleId: selectedBeetleId,
-      date: form.date,
-      stage: form.stage,
-      weight: form.weight,
-      temperature: form.temperature,
-      humidity: form.humidity,
-      substrate: resolveSubstrateType(form.substrateSelection, form.substrateCustom),
-      notes: form.notes.trim(),
-      createdAt: new Date().toISOString().slice(0, 10),
-    };
-
-    onAddEntry(entry);
-    setForm((prev) => ({
+    onAddEntry(
+      buildEntryFromForm(addForm, selectedBeetleId, nextId, new Date().toISOString().slice(0, 10))
+    );
+    setAddForm((prev) => ({
       ...prev,
       weight: 0,
       notes: '',
     }));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    flashSaved();
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEntry || !editForm) return;
+
+    onUpdateEntry(buildEntryFromForm(editForm, editingEntry.beetleId, editingEntry.id, editingEntry.createdAt));
+    closeEdit();
+    flashSaved();
+  };
+
+  const handleDelete = (id: string) => {
+    onDeleteEntry(id);
+    if (editingEntryId === id) {
+      closeEdit();
+    }
   };
 
   return (
@@ -131,7 +286,10 @@ export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLog
         <FormField label="Beetle">
           <SelectInput
             value={selectedBeetleId}
-            onChange={setSelectedBeetleId}
+            onChange={(value) => {
+              setSelectedBeetleId(value);
+              closeEdit();
+            }}
             options={beetleOptions}
             placeholder="Select beetle…"
           />
@@ -189,29 +347,57 @@ export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLog
                         <th className="text-right py-2 text-gray-500 font-medium hidden sm:table-cell">Temp</th>
                         <th className="text-right py-2 text-gray-500 font-medium hidden sm:table-cell">Humidity</th>
                         <th className="text-left py-2 text-gray-500 font-medium hidden md:table-cell">Substrate</th>
+                        <th className="w-16 py-2 text-right text-gray-500 font-medium">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {[...beetleHistory].reverse().map((entry) => (
-                      <tr key={entry.id} className="border-b border-gray-800/50">
-                        <td className="py-2 text-gray-400">{formatDisplayDate(entry.date)}</td>
-                        <td className="py-2">
-                          <Badge variant="info">{entry.stage}</Badge>
-                        </td>
-                        <td className="py-2 text-right text-emerald-400 font-medium">{entry.weight}g</td>
-                        <td className="py-2 text-right text-gray-500 hidden sm:table-cell">
-                          {entry.temperature ? `${entry.temperature}°C` : '—'}
-                        </td>
-                        <td className="py-2 text-right text-gray-500 hidden sm:table-cell">
-                          {entry.humidity ? `${entry.humidity}%` : '—'}
-                        </td>
-                        <td className="py-2 text-gray-500 hidden md:table-cell max-w-[120px] truncate">
-                          {entry.substrate || '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        <tr
+                          key={entry.id}
+                          className={`border-b border-gray-800/50 group ${
+                            editingEntryId === entry.id ? 'bg-sky-500/5' : ''
+                          }`}
+                        >
+                          <td className="py-2 text-gray-400">{formatDisplayDate(entry.date)}</td>
+                          <td className="py-2">
+                            <Badge variant="info">{entry.stage}</Badge>
+                          </td>
+                          <td className="py-2 text-right text-emerald-400 font-medium">{entry.weight}g</td>
+                          <td className="py-2 text-right text-gray-500 hidden sm:table-cell">
+                            {entry.temperature ? `${entry.temperature}°C` : '—'}
+                          </td>
+                          <td className="py-2 text-right text-gray-500 hidden sm:table-cell">
+                            {entry.humidity ? `${entry.humidity}%` : '—'}
+                          </td>
+                          <td className="py-2 text-gray-500 hidden md:table-cell max-w-[120px] truncate">
+                            {entry.substrate || '—'}
+                          </td>
+                          <td className="py-2">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openEdit(entry)}
+                                className="p-1.5 rounded-md text-gray-600 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
+                                title="Edit entry"
+                                aria-label={`Edit ${entry.stage} entry from ${formatDisplayDate(entry.date)}`}
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(entry.id)}
+                                className="p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                title="Delete entry"
+                                aria-label={`Delete ${entry.stage} entry from ${formatDisplayDate(entry.date)}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             ) : (
@@ -219,65 +405,42 @@ export function GrowthLogPanel({ beetles, growthEntries, onAddEntry }: GrowthLog
             )}
           </Card>
 
-          <form onSubmit={handleSubmit}>
+          {editingEntry && editForm && (
+            <form onSubmit={handleEditSubmit}>
+              <Card>
+                <CardHeader
+                  title="Edit Growth Entry"
+                  subtitle={`Entry ID: ${editingEntry.id}`}
+                />
+                <GrowthEntryFields form={editForm} onChange={setEditForm} />
+                <div className="flex flex-wrap items-center justify-between gap-3 mt-6 pt-4 border-t border-gray-800">
+                  <Button
+                    type="button"
+                    variant="danger"
+                    onClick={() => handleDelete(editingEntry.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Entry
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="ghost" onClick={closeEdit}>
+                      <X className="w-4 h-4" />
+                      Cancel
+                    </Button>
+                    <Button type="submit" variant="primary">
+                      <Save className="w-4 h-4" />
+                      Save Changes
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            </form>
+          )}
+
+          <form onSubmit={handleAddSubmit}>
             <Card>
               <CardHeader title="Add Growth Entry" subtitle={`Entry ID: ${nextId}`} />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField label="Date" required>
-                  <TextInput type="date" value={form.date} onChange={(v) => setForm((p) => ({ ...p, date: v }))} required />
-                </FormField>
-                <FormField label="Stage" required>
-                  <SelectInput
-                    value={form.stage}
-                    onChange={(v) => setForm((p) => ({ ...p, stage: v as GrowthStage }))}
-                    options={stageOptions}
-                  />
-                </FormField>
-                <FormField label="Weight (g)" required>
-                  <NumberInput
-                    value={form.weight}
-                    onChange={(v) => setForm((p) => ({ ...p, weight: v }))}
-                    step={0.1}
-                    min={0}
-                    required
-                  />
-                </FormField>
-                <FormField label="Temperature (°C)">
-                  <NumberInput
-                    value={form.temperature}
-                    onChange={(v) => setForm((p) => ({ ...p, temperature: v }))}
-                    step={0.5}
-                    min={0}
-                    max={40}
-                  />
-                </FormField>
-                <FormField label="Humidity (%)">
-                  <NumberInput
-                    value={form.humidity}
-                    onChange={(v) => setForm((p) => ({ ...p, humidity: v }))}
-                    step={1}
-                    min={0}
-                    max={100}
-                  />
-                </FormField>
-                <div className="md:col-span-2">
-                  <SubstrateTypeField
-                    selection={form.substrateSelection}
-                    customValue={form.substrateCustom}
-                    onSelectionChange={(v) => setForm((p) => ({ ...p, substrateSelection: v }))}
-                    onCustomChange={(v) => setForm((p) => ({ ...p, substrateCustom: v }))}
-                  />
-                </div>
-                <FormField label="Notes" className="md:col-span-2">
-                  <textarea
-                    value={form.notes}
-                    onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-                    placeholder="Observations, health notes…"
-                    rows={2}
-                    className="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:ring-1 focus:ring-sky-500/50 resize-none"
-                  />
-                </FormField>
-              </div>
+              <GrowthEntryFields form={addForm} onChange={setAddForm} />
               <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-800">
                 <div>{saved && <Badge variant="success">Growth entry saved!</Badge>}</div>
                 <Button type="submit" variant="primary">

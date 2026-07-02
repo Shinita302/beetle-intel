@@ -59,6 +59,8 @@ interface BeetleAppContextValue {
   updateBeetle: (beetle: Beetle) => Promise<Beetle | null>;
   addGrowthEntry: (entry: GrowthEntry) => void;
   addGrowthEntries: (entries: GrowthEntry[]) => void;
+  deleteGrowthEntry: (id: string) => void;
+  updateGrowthEntry: (entry: GrowthEntry) => void;
   updateSpeciesInventory: (rows: SpeciesInventory[]) => void;
   upsertSpeciesInventory: (row: SpeciesInventory) => void;
   addPairing: (pairing: Pairing) => void;
@@ -413,6 +415,9 @@ export function BeetleAppProvider({
       updateBeetle,
       addGrowthEntry: (entry) => setGrowthEntries((prev) => [entry, ...prev]),
       addGrowthEntries: (entries) => setGrowthEntries((prev) => [...entries, ...prev]),
+      deleteGrowthEntry: (id) => setGrowthEntries((prev) => prev.filter((entry) => entry.id !== id)),
+      updateGrowthEntry: (entry) =>
+        setGrowthEntries((prev) => prev.map((item) => (item.id === entry.id ? entry : item))),
       updateSpeciesInventory: (rows) => setSpeciesInventory(normalizeSpeciesInventory(rows)),
       upsertSpeciesInventory: (row) =>
         setSpeciesInventory((prev) => {

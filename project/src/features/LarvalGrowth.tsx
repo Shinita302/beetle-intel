@@ -5,9 +5,11 @@ interface LarvalGrowthProps {
   beetles: Beetle[];
   growthEntries: GrowthEntry[];
   onAdd: (entry: GrowthEntry) => void;
+  onUpdate: (entry: GrowthEntry) => void;
+  onDelete: (id: string) => void;
 }
 
-export function LarvalGrowth({ beetles, growthEntries, onAdd }: LarvalGrowthProps) {
+export function LarvalGrowth({ beetles, growthEntries, onAdd, onUpdate, onDelete }: LarvalGrowthProps) {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
@@ -17,7 +19,13 @@ export function LarvalGrowth({ beetles, growthEntries, onAdd }: LarvalGrowthProp
         </p>
       </div>
 
-      <GrowthLogPanel beetles={beetles} growthEntries={growthEntries} onAddEntry={onAdd} />
+      <GrowthLogPanel
+        beetles={beetles}
+        growthEntries={growthEntries}
+        onAddEntry={onAdd}
+        onUpdateEntry={onUpdate}
+        onDeleteEntry={onDelete}
+      />
     </div>
   );
 }
