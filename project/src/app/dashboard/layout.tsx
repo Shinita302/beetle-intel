@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { BeetleAppProvider } from '@/contexts/BeetleAppContext';
 import { DashboardShell } from '@/components/layout/DashboardShell';
+import { isBreedingSyncRow } from '@/lib/breedingDataBeetleStore';
 import { fetchUserBeetles } from '@/lib/beetles';
 import { fetchUserBreedingData } from '@/lib/userBreedingData';
 import { createClient } from '@/lib/supabase/server';
@@ -17,11 +18,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect('/login');
   }
 
-  const dbBeetles = await fetchUserBeetles(supabase, user.id);
-  const { data: initialBreedingData, syncEnabled: breedingSyncEnabled } = await fetchUserBreedingData(
-    supabase,
-    user.id
-  );
+  const dbBeetles = (await fetchUserBeetles(supabase, user.id)).filter((row) => !isBreedingSyncRow(row));
+  const initialBreedingData = await fetchUserBreedingData(supabase, user.id);
 
   return (
     <BeetleAppProvider
@@ -29,7 +27,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
       userEmail={user.email}
       initialDbBeetles={dbBeetles}
       initialBreedingData={initialBreedingData}
-      breedingSyncEnabled={breedingSyncEnabled}
     >
       <DashboardShell>{children}</DashboardShell>
     </BeetleAppProvider>

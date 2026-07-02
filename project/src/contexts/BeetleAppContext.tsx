@@ -9,7 +9,6 @@ import {
   updateBeetleForUser,
 } from '@/lib/beetles';
 import {
-  BREEDING_DATA_MIGRATION_HINT,
   deleteUserBreedingData,
   hasBreedingData,
   normalizeUserBreedingData,
@@ -83,18 +82,28 @@ interface BeetleAppProviderProps {
   userEmail: string | undefined;
   initialDbBeetles: DbBeetle[];
   initialBreedingData: UserBreedingData;
-  breedingSyncEnabled?: boolean;
   children: ReactNode;
 }
 
 const SYNC_DEBOUNCE_MS = 800;
+
+function mergeBreedingDataSets(remote: UserBreedingData, local: UserBreedingData): UserBreedingData {
+  return {
+    growthEntries:
+      remote.growthEntries.length >= local.growthEntries.length
+        ? remote.growthEntries
+        : local.growthEntries,
+    speciesInventory: mergeSpeciesInventory(remote.speciesInventory, local.speciesInventory),
+    pairings: remote.pairings.length >= local.pairings.length ? remote.pairings : local.pairings,
+    pestRisks: remote.pestRisks.length >= local.pestRisks.length ? remote.pestRisks : local.pestRisks,
+  };
+}
 
 export function BeetleAppProvider({
   userId,
   userEmail,
   initialDbBeetles,
   initialBreedingData,
-  breedingSyncEnabled = true,
   children,
 }: BeetleAppProviderProps) {
   const router = useRouter();
@@ -104,7 +113,7 @@ export function BeetleAppProvider({
   );
 
   const [beetles, setBeetles] = useState<Beetle[]>(() => dbBeetlesToBeetles(initialDbBeetles));
-  const [dataError, setDataError] = useState(breedingSyncEnabled ? '' : BREEDING_DATA_MIGRATION_HINT);
+  const [dataError, setDataError] = useState('');
   const [busy, setBusy] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const skipSyncRef = useRef(true);
@@ -120,16 +129,43 @@ export function BeetleAppProvider({
 
     async function hydrateFromLocalStorage() {
       if (migratedLocalRef.current) return;
-      if (!breedingSyncEnabled) {
-        setHydrated(true);
-        return;
-      }
+
+      const local = readLegacyLocalAppData(userId);
+
       if (hasBreedingData(normalizedInitial)) {
+        if (hasBreedingData(local)) {
+          const merged = mergeBreedingDataSets(normalizedInitial, local);
+          migratedLocalRef.current = true;
+          skipSyncRef.current = true;
+          setGrowthEntries(merged.growthEntries);
+          setSpeciesInventory(merged.speciesInventory);
+          setPairings(merged.pairings);
+          setPestRisks(merged.pestRisks);
+          try {
+            const supabase = createClient();
+            await upsertUserBreedingData(supabase, userId, merged);
+            clearAllAppDataFromStorage(userId);
+            router.refresh();
+          } catch (err) {
+            if (!cancelled) {
+              setDataError(
+                err instanceof Error
+                  ? err.message
+                  : 'Could not merge local data with your account.'
+              );
+            }
+          } finally {
+            if (!cancelled) {
+              skipSyncRef.current = false;
+              setHydrated(true);
+            }
+          }
+          return;
+        }
         setHydrated(true);
         return;
       }
 
-      const local = readLegacyLocalAppData(userId);
       if (!hasBreedingData(local)) {
         setSpeciesInventory((prev) => migrateDbRowsToSpeciesInventory(initialDbBeetles, prev));
         setHydrated(true);
@@ -158,6 +194,7 @@ export function BeetleAppProvider({
           pestRisks: local.pestRisks,
         });
         clearAllAppDataFromStorage(userId);
+        router.refresh();
       } catch (err) {
         if (!cancelled) {
           setDataError(
@@ -179,7 +216,7 @@ export function BeetleAppProvider({
     return () => {
       cancelled = true;
     };
-  }, [userId, normalizedInitial, initialDbBeetles, breedingSyncEnabled]);
+  }, [userId, normalizedInitial, initialDbBeetles, router]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -196,7 +233,7 @@ export function BeetleAppProvider({
   }, [beetles, growthEntries]);
 
   useEffect(() => {
-    if (!hydrated || !breedingSyncEnabled) return;
+    if (!hydrated) return;
 
     const timer = window.setTimeout(async () => {
       if (skipSyncRef.current) {
@@ -212,9 +249,7 @@ export function BeetleAppProvider({
           pairings,
           pestRisks,
         });
-        setDataError((prev) =>
-          prev.includes('002_user_breeding_data') || prev.includes('upload local data') ? prev : ''
-        );
+        setDataError((prev) => (prev.includes('upload local data') ? prev : ''));
       } catch (err) {
         setDataError(
           err instanceof Error ? err.message : 'Could not save breeding data to your account.'
@@ -223,7 +258,7 @@ export function BeetleAppProvider({
     }, SYNC_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timer);
-  }, [growthEntries, speciesInventory, pairings, pestRisks, userId, hydrated, breedingSyncEnabled]);
+  }, [growthEntries, speciesInventory, pairings, pestRisks, userId, hydrated]);
 
   const run = useCallback(async (fn: () => Promise<void>) => {
     setDataError('');
@@ -327,8 +362,8 @@ export function BeetleAppProvider({
   const clearAllData = useCallback(async () => {
     await run(async () => {
       const supabase = createClient();
-      await deleteAllBeetlesForUser(supabase, userId);
       await deleteUserBreedingData(supabase, userId);
+      await deleteAllBeetlesForUser(supabase, userId);
       skipSyncRef.current = true;
       setBeetles([]);
       setGrowthEntries([]);

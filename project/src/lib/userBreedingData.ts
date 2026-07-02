@@ -3,6 +3,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { GrowthEntry, Pairing, PestRisk, SpeciesInventory } from '@/types';
 import type { DbUserBreedingData } from '@/types/database';
 import {
+  deleteBreedingDataFromBeetleStore,
+  fetchBreedingDataFromBeetleStore,
+  upsertBreedingDataToBeetleStore,
+} from '@/lib/breedingDataBeetleStore';
+import {
   normalizeGrowthEntries,
   normalizePairings,
   normalizeSpeciesInventory,
@@ -22,7 +27,6 @@ export const EMPTY_USER_BREEDING_DATA: UserBreedingData = {
   pestRisks: [],
 };
 
-/** True when Supabase has not been migrated with user_breeding_data yet. */
 export function isBreedingDataTableUnavailable(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
   const message = (error.message ?? '').toLowerCase();
@@ -37,9 +41,6 @@ export function isBreedingDataTableUnavailable(error: { code?: string; message?:
         message.includes('could not find')))
   );
 }
-
-export const BREEDING_DATA_MIGRATION_HINT =
-  'Run supabase/migrations/002_user_breeding_data.sql in the Supabase SQL Editor to enable cross-browser sync.';
 
 export function normalizeUserBreedingData(raw: Partial<UserBreedingData> | null | undefined): UserBreedingData {
   if (!raw) return { ...EMPTY_USER_BREEDING_DATA };
@@ -73,15 +74,10 @@ function rowToUserBreedingData(row: DbUserBreedingData): UserBreedingData {
   };
 }
 
-export interface FetchUserBreedingDataResult {
-  data: UserBreedingData;
-  syncEnabled: boolean;
-}
-
-export async function fetchUserBreedingData(
+async function fetchBreedingDataFromTable(
   client: SupabaseClient,
   userId: string
-): Promise<FetchUserBreedingDataResult> {
+): Promise<{ data: UserBreedingData; tableAvailable: boolean }> {
   const { data, error } = await client
     .from('user_breeding_data')
     .select('growth_entries, species_inventory, pairings, pest_risks')
@@ -90,16 +86,33 @@ export async function fetchUserBreedingData(
 
   if (error) {
     if (isBreedingDataTableUnavailable(error)) {
-      return { data: { ...EMPTY_USER_BREEDING_DATA }, syncEnabled: false };
+      return { data: { ...EMPTY_USER_BREEDING_DATA }, tableAvailable: false };
     }
     throw new Error(error.message);
   }
 
   if (!data) {
-    return { data: { ...EMPTY_USER_BREEDING_DATA }, syncEnabled: true };
+    return { data: { ...EMPTY_USER_BREEDING_DATA }, tableAvailable: true };
   }
 
-  return { data: rowToUserBreedingData(data as DbUserBreedingData), syncEnabled: true };
+  return { data: rowToUserBreedingData(data as DbUserBreedingData), tableAvailable: true };
+}
+
+export async function fetchUserBreedingData(
+  client: SupabaseClient,
+  userId: string
+): Promise<UserBreedingData> {
+  const tableResult = await fetchBreedingDataFromTable(client, userId);
+  if (tableResult.tableAvailable && hasBreedingData(tableResult.data)) {
+    return tableResult.data;
+  }
+
+  const beetleStore = await fetchBreedingDataFromBeetleStore(client, userId);
+  if (hasBreedingData(beetleStore)) {
+    return beetleStore;
+  }
+
+  return tableResult.data;
 }
 
 export async function upsertUserBreedingData(
@@ -108,6 +121,7 @@ export async function upsertUserBreedingData(
   data: UserBreedingData
 ): Promise<void> {
   const normalized = normalizeUserBreedingData(data);
+
   const { error } = await client.from('user_breeding_data').upsert(
     {
       user_id: userId,
@@ -120,21 +134,22 @@ export async function upsertUserBreedingData(
     { onConflict: 'user_id' }
   );
 
-  if (error) {
-    if (isBreedingDataTableUnavailable(error)) {
-      throw new Error(BREEDING_DATA_MIGRATION_HINT);
-    }
+  if (!error) {
+    return;
+  }
+
+  if (!isBreedingDataTableUnavailable(error)) {
     throw new Error(error.message);
   }
+
+  await upsertBreedingDataToBeetleStore(client, userId, normalized);
 }
 
 export async function deleteUserBreedingData(client: SupabaseClient, userId: string): Promise<void> {
   const { error } = await client.from('user_breeding_data').delete().eq('user_id', userId);
-
-  if (error) {
-    if (isBreedingDataTableUnavailable(error)) {
-      return;
-    }
+  if (error && !isBreedingDataTableUnavailable(error)) {
     throw new Error(error.message);
   }
+
+  await deleteBreedingDataFromBeetleStore(client, userId);
 }
