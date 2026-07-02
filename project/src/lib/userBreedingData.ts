@@ -1,3 +1,4 @@
+import type { Json } from '@/types/database-json';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { GrowthEntry, Pairing, PestRisk, SpeciesInventory } from '@/types';
 import type { DbUserBreedingData } from '@/types/database';
@@ -40,13 +41,17 @@ export function hasBreedingData(data: UserBreedingData): boolean {
   );
 }
 
+function jsonArray(value: Json | null | undefined): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
 function rowToUserBreedingData(row: DbUserBreedingData): UserBreedingData {
-  return normalizeUserBreedingData({
-    growthEntries: (row.growth_entries ?? []) as GrowthEntry[],
-    speciesInventory: (row.species_inventory ?? []) as SpeciesInventory[],
-    pairings: (row.pairings ?? []) as Pairing[],
-    pestRisks: (row.pest_risks ?? []) as PestRisk[],
-  });
+  return {
+    growthEntries: normalizeGrowthEntries(jsonArray(row.growth_entries)),
+    speciesInventory: normalizeSpeciesInventory(jsonArray(row.species_inventory) as SpeciesInventory[]),
+    pairings: normalizePairings(jsonArray(row.pairings)),
+    pestRisks: jsonArray(row.pest_risks) as PestRisk[],
+  };
 }
 
 export async function fetchUserBreedingData(
