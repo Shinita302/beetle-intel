@@ -55,8 +55,8 @@ interface BeetleAppContextValue {
   pestRisks: PestRisk[];
   dataError: string;
   busy: boolean;
-  addBeetle: (beetle: Beetle) => Promise<void>;
-  updateBeetle: (beetle: Beetle) => Promise<void>;
+  addBeetle: (beetle: Beetle) => Promise<Beetle | null>;
+  updateBeetle: (beetle: Beetle) => Promise<Beetle | null>;
   addGrowthEntry: (entry: GrowthEntry) => void;
   addGrowthEntries: (entries: GrowthEntry[]) => void;
   updateSpeciesInventory: (rows: SpeciesInventory[]) => void;
@@ -284,25 +284,29 @@ export function BeetleAppProvider({
   );
 
   const addBeetle = useCallback(
-    async (beetle: Beetle) => {
+    async (beetle: Beetle): Promise<Beetle | null> => {
+      let saved: Beetle | null = null;
       await run(async () => {
         const supabase = createClient();
         const rows = await insertBeetlesForUser(supabase, userId, [beetle]);
-        const saved = dbBeetleToBeetle(rows[0]);
-        setBeetles((prev) => [saved, ...prev]);
+        saved = dbBeetleToBeetle(rows[0]);
+        setBeetles((prev) => [saved!, ...prev]);
       });
+      return saved;
     },
     [run, userId]
   );
 
   const updateBeetle = useCallback(
-    async (beetle: Beetle) => {
+    async (beetle: Beetle): Promise<Beetle | null> => {
+      let saved: Beetle | null = null;
       await run(async () => {
         const supabase = createClient();
         const row = await updateBeetleForUser(supabase, userId, beetle);
-        const saved = dbBeetleToBeetle(row);
-        setBeetles((prev) => prev.map((b) => (b.id === saved.id ? saved : b)));
+        saved = dbBeetleToBeetle(row);
+        setBeetles((prev) => prev.map((b) => (b.id === saved!.id ? saved! : b)));
       });
+      return saved;
     },
     [run, userId]
   );
