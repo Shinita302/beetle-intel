@@ -1,4 +1,4 @@
-import type { Beetle, BeetleSex, BeetleStatus, LarvalInstar } from '@/types';
+import type { Beetle, BeetleSex, BeetleStatus } from '@/types';
 import type { DbBeetle, DbBeetleInsert, BeetleProfileMeta } from '@/types/database';
 
 function buildNotesMeta(beetle: Beetle): string {
