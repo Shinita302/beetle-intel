@@ -1,5 +1,5 @@
 import { STORAGE_KEYS, userStorageKey } from '@/constants/storageKeys';
-import type { PestRisk } from '@/types';
+import type { PestRisk, SpeciesInventory } from '@/types';
 import type { UserBreedingData } from '@/lib/userBreedingData';
 import {
   normalizeGrowthEntries,
@@ -34,7 +34,7 @@ export function readLegacyLocalAppData(userId: string): UserBreedingData {
     growthEntries,
     speciesInventory: readJsonArray(
       userStorageKey(STORAGE_KEYS.speciesInventory, userId),
-      normalizeSpeciesInventory
+      (rows) => normalizeSpeciesInventory(rows as SpeciesInventory[])
     ),
     pairings: readJsonArray(userStorageKey(STORAGE_KEYS.pairings, userId), normalizePairings),
     pestRisks: readJsonArray(userStorageKey(STORAGE_KEYS.pestRisks, userId), (rows) => rows as PestRisk[]),
