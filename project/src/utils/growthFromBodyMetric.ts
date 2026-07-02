@@ -1,4 +1,4 @@
-import type { Beetle, BeetleStatus, GrowthEntry, GrowthStage, LarvalInstar } from '@/types';
+import type { Beetle, GrowthEntry, GrowthStage, LarvalInstar } from '@/types';
 import { beetleUsesWeightMetric } from '@/utils/beetleProfileValidation';
 
 function stageForBeetle(beetle: Beetle): GrowthStage | null {
