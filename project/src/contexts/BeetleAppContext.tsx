@@ -9,6 +9,7 @@ import {
   updateBeetleForUser,
 } from '@/lib/beetles';
 import {
+  BREEDING_DATA_MIGRATION_HINT,
   deleteUserBreedingData,
   hasBreedingData,
   normalizeUserBreedingData,
@@ -54,6 +55,7 @@ interface BeetleAppContextValue {
   pairings: Pairing[];
   pestRisks: PestRisk[];
   dataError: string;
+  breedingSyncEnabled: boolean;
   busy: boolean;
   addBeetle: (beetle: Beetle) => Promise<void>;
   updateBeetle: (beetle: Beetle) => Promise<void>;
@@ -82,6 +84,7 @@ interface BeetleAppProviderProps {
   userEmail: string | undefined;
   initialDbBeetles: DbBeetle[];
   initialBreedingData: UserBreedingData;
+  breedingSyncEnabled?: boolean;
   children: ReactNode;
 }
 
@@ -92,6 +95,7 @@ export function BeetleAppProvider({
   userEmail,
   initialDbBeetles,
   initialBreedingData,
+  breedingSyncEnabled = true,
   children,
 }: BeetleAppProviderProps) {
   const router = useRouter();
@@ -101,7 +105,7 @@ export function BeetleAppProvider({
   );
 
   const [beetles, setBeetles] = useState<Beetle[]>(() => dbBeetlesToBeetles(initialDbBeetles));
-  const [dataError, setDataError] = useState('');
+  const [dataError, setDataError] = useState(breedingSyncEnabled ? '' : BREEDING_DATA_MIGRATION_HINT);
   const [busy, setBusy] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const skipSyncRef = useRef(true);
@@ -117,6 +121,10 @@ export function BeetleAppProvider({
 
     async function hydrateFromLocalStorage() {
       if (migratedLocalRef.current) return;
+      if (!breedingSyncEnabled) {
+        setHydrated(true);
+        return;
+      }
       if (hasBreedingData(normalizedInitial)) {
         setHydrated(true);
         return;
@@ -172,7 +180,7 @@ export function BeetleAppProvider({
     return () => {
       cancelled = true;
     };
-  }, [userId, normalizedInitial, initialDbBeetles]);
+  }, [userId, normalizedInitial, initialDbBeetles, breedingSyncEnabled]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -214,7 +222,7 @@ export function BeetleAppProvider({
     }, SYNC_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timer);
-  }, [growthEntries, speciesInventory, pairings, pestRisks, userId, hydrated]);
+  }, [growthEntries, speciesInventory, pairings, pestRisks, userId, hydrated, breedingSyncEnabled]);
 
   const run = useCallback(async (fn: () => Promise<void>) => {
     setDataError('');

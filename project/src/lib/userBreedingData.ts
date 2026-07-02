@@ -22,6 +22,25 @@ export const EMPTY_USER_BREEDING_DATA: UserBreedingData = {
   pestRisks: [],
 };
 
+/** True when Supabase has not been migrated with user_breeding_data yet. */
+export function isBreedingDataTableUnavailable(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  const message = (error.message ?? '').toLowerCase();
+  return (
+    error.code === '42P01' ||
+    error.code === 'PGRST205' ||
+    error.code === 'PGRST204' ||
+    (message.includes('user_breeding_data') &&
+      (message.includes('does not exist') ||
+        message.includes('not found') ||
+        message.includes('schema cache') ||
+        message.includes('could not find')))
+  );
+}
+
+export const BREEDING_DATA_MIGRATION_HINT =
+  'Run supabase/migrations/002_user_breeding_data.sql in the Supabase SQL Editor to enable cross-browser sync.';
+
 export function normalizeUserBreedingData(raw: Partial<UserBreedingData> | null | undefined): UserBreedingData {
   if (!raw) return { ...EMPTY_USER_BREEDING_DATA };
   return {
@@ -54,10 +73,15 @@ function rowToUserBreedingData(row: DbUserBreedingData): UserBreedingData {
   };
 }
 
+export interface FetchUserBreedingDataResult {
+  data: UserBreedingData;
+  syncEnabled: boolean;
+}
+
 export async function fetchUserBreedingData(
   client: SupabaseClient,
   userId: string
-): Promise<UserBreedingData> {
+): Promise<FetchUserBreedingDataResult> {
   const { data, error } = await client
     .from('user_breeding_data')
     .select('growth_entries, species_inventory, pairings, pest_risks')
@@ -65,11 +89,17 @@ export async function fetchUserBreedingData(
     .maybeSingle();
 
   if (error) {
+    if (isBreedingDataTableUnavailable(error)) {
+      return { data: { ...EMPTY_USER_BREEDING_DATA }, syncEnabled: false };
+    }
     throw new Error(error.message);
   }
 
-  if (!data) return { ...EMPTY_USER_BREEDING_DATA };
-  return rowToUserBreedingData(data as DbUserBreedingData);
+  if (!data) {
+    return { data: { ...EMPTY_USER_BREEDING_DATA }, syncEnabled: true };
+  }
+
+  return { data: rowToUserBreedingData(data as DbUserBreedingData), syncEnabled: true };
 }
 
 export async function upsertUserBreedingData(
@@ -91,6 +121,9 @@ export async function upsertUserBreedingData(
   );
 
   if (error) {
+    if (isBreedingDataTableUnavailable(error)) {
+      throw new Error(BREEDING_DATA_MIGRATION_HINT);
+    }
     throw new Error(error.message);
   }
 }
@@ -99,6 +132,9 @@ export async function deleteUserBreedingData(client: SupabaseClient, userId: str
   const { error } = await client.from('user_breeding_data').delete().eq('user_id', userId);
 
   if (error) {
+    if (isBreedingDataTableUnavailable(error)) {
+      return;
+    }
     throw new Error(error.message);
   }
 }

@@ -18,7 +18,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const dbBeetles = await fetchUserBeetles(supabase, user.id);
-  const initialBreedingData = await fetchUserBreedingData(supabase, user.id);
+  const { data: initialBreedingData, syncEnabled: breedingSyncEnabled } = await fetchUserBreedingData(
+    supabase,
+    user.id
+  );
 
   return (
     <BeetleAppProvider
@@ -26,6 +29,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       userEmail={user.email}
       initialDbBeetles={dbBeetles}
       initialBreedingData={initialBreedingData}
+      breedingSyncEnabled={breedingSyncEnabled}
     >
       <DashboardShell>{children}</DashboardShell>
     </BeetleAppProvider>
