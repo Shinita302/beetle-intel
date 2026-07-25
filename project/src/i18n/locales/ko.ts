@@ -1,5 +1,4 @@
 import type { MessageTree } from '../types';
-import type { EnMessages } from './en';
 
 const ko = {
   brand: {
@@ -102,6 +101,6 @@ const ko = {
     deleting: '삭제 중…',
     deleteAccountError: '계정을 삭제할 수 없습니다.',
   },
-} as const satisfies EnMessages & MessageTree;
+} as const satisfies MessageTree;
 
 export default ko;
