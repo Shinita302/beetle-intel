@@ -62,3 +62,7 @@ npm run preview
 ```
 
 Built files go to `project\dist\`.
+
+## Korean UI (branch `i18n-ko`)
+
+English / Korean switcher is developed on branch **`i18n-ko`**. See **[project/docs/I18N_KO.md](project/docs/I18N_KO.md)**. Keep beta users on `main` until you merge.

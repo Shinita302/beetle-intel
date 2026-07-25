@@ -18,6 +18,7 @@ import {
   normalizeBeetleSizeMm,
 } from '../utils/beetleProfileValidation';
 import { latestLarvalInstarFromGrowth } from '../utils/growthFromBodyMetric';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface AddBeetleProps {
   beetles: Beetle[];
@@ -221,6 +222,7 @@ function AdvancedSection({
 }
 
 export function AddBeetle({ beetles, growthEntries = [], onAdd, onUpdate }: AddBeetleProps) {
+  const { t } = useLanguage();
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState<FormErrors>({});
   const [saved, setSaved] = useState(false);
@@ -348,8 +350,8 @@ export function AddBeetle({ beetles, growthEntries = [], onAdd, onUpdate }: AddB
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-xl font-bold text-gray-100">Add Beetle</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Quick profile for an individual beetle</p>
+        <h1 className="text-xl font-bold text-gray-100">{t('pages.addBeetleTitle')}</h1>
+        <p className="text-sm text-gray-500 mt-0.5">{t('pages.addBeetleSubtitle')}</p>
       </div>
 
       <form onSubmit={handleSubmit} noValidate>

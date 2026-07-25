@@ -14,6 +14,7 @@ import {
   type SpeciesInventoryStageKey,
 } from '../types';
 import { Bug, Egg, Sprout, Users } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface InventoryProps {
   speciesInventory: SpeciesInventory[];
@@ -37,6 +38,7 @@ const STAGE_COLUMNS: { key: SpeciesInventoryStageKey; label: string }[] = [
 const PAGE_SIZE = 8;
 
 export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryProps) {
+  const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('species');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -152,8 +154,8 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
     <div className="space-y-6 max-w-6xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-100">Inventory</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Collection-level population counts by species</p>
+          <h1 className="text-xl font-bold text-gray-100">{t('pages.inventoryTitle')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t('pages.inventorySubtitle')}</p>
         </div>
         <Button type="button" variant="primary" size="sm" onClick={startAdd}>
           <Plus className="w-4 h-4" />

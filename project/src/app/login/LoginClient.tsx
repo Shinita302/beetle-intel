@@ -4,19 +4,22 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { AuthButton, AuthError, AuthField, AuthShell } from '@/components/auth/AuthShell';
+import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { getAuthCallbackUrl } from '@/lib/authRedirect';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useLanguage();
   const redirectTo = searchParams.get('redirect') ?? '/dashboard';
   const callbackError = searchParams.get('error');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(
-    callbackError === 'auth_callback_failed' ? 'Sign-in failed. Please try again.' : ''
+    callbackError === 'auth_callback_failed' ? t('auth.signInFailed') : ''
   );
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
@@ -56,7 +59,7 @@ export default function LoginClient() {
 
   const handleForgotPassword = async () => {
     if (!email.trim()) {
-      setError('Enter your email address first, then click forgot password.');
+      setError(t('auth.enterEmailFirst'));
       return;
     }
     setError('');
@@ -74,68 +77,75 @@ export default function LoginClient() {
   };
 
   return (
-    <AuthShell
-      title="Log in"
-      subtitle="Access your beetle breeding records"
-      footer={
-        <>
-          No account?{' '}
-          <Link href="/signup" className="text-sky-400 hover:text-sky-300">
-            Sign up
-          </Link>
-        </>
-      }
-    >
-      <AuthError message={error} />
-      {resetSent && (
-        <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
-          Password reset email sent. Check your inbox.
-        </div>
-      )}
-
-      <form onSubmit={handleLogin}>
-        <AuthField
-          label="Email"
-          id="email"
-          type="email"
-          value={email}
-          onChange={setEmail}
-          autoComplete="email"
-        />
-        <AuthField
-          label="Password"
-          id="password"
-          type="password"
-          value={password}
-          onChange={setPassword}
-          autoComplete="current-password"
-        />
-
-        <div className="mb-4 text-right">
-          <button
-            type="button"
-            onClick={handleForgotPassword}
-            className="text-xs text-gray-500 hover:text-sky-400 transition-colors"
-          >
-            Forgot password?
-          </button>
-        </div>
-
-        <AuthButton disabled={loading}>{loading ? 'Logging in…' : 'Log in'}</AuthButton>
-      </form>
-
-      <div className="relative my-5">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-800" />
-        </div>
-        <div className="relative flex justify-center text-xs">
-          <span className="bg-gray-900/60 px-2 text-gray-600">or</span>
-        </div>
+    <div className="relative">
+      <div className="absolute top-4 right-4 z-10">
+        <LanguageSwitcher />
       </div>
+      <AuthShell
+        title={t('auth.loginTitle')}
+        subtitle={t('auth.loginSubtitle')}
+        footer={
+          <>
+            {t('auth.noAccount')}{' '}
+            <Link href="/signup" className="text-sky-400 hover:text-sky-300">
+              {t('auth.signUpLink')}
+            </Link>
+          </>
+        }
+      >
+        <AuthError message={error} />
+        {resetSent && (
+          <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+            {t('auth.resetSent')}
+          </div>
+        )}
 
-      <AuthButton type="button" variant="secondary" disabled={loading} onClick={handleGoogle}>
-        Continue with Google
-      </AuthButton>
-    </AuthShell>
+        <form onSubmit={handleLogin}>
+          <AuthField
+            label={t('auth.email')}
+            id="email"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            autoComplete="email"
+          />
+          <AuthField
+            label={t('auth.password')}
+            id="password"
+            type="password"
+            value={password}
+            onChange={setPassword}
+            autoComplete="current-password"
+          />
+
+          <div className="mb-4 text-right">
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              className="text-xs text-gray-500 hover:text-sky-400 transition-colors"
+            >
+              {t('auth.forgotPassword')}
+            </button>
+          </div>
+
+          <AuthButton disabled={loading}>
+            {loading ? t('auth.loggingIn') : t('auth.logIn')}
+          </AuthButton>
+        </form>
+
+        <div className="relative my-5">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-800" />
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-gray-900/60 px-2 text-gray-600">{t('common.or')}</span>
+          </div>
+        </div>
+
+        <AuthButton type="button" variant="secondary" disabled={loading} onClick={handleGoogle}>
+          {t('auth.continueGoogle')}
+        </AuthButton>
+      </AuthShell>
+    </div>
   );
 }

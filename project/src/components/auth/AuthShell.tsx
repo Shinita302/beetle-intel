@@ -1,5 +1,8 @@
+'use client';
+
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface AuthShellProps {
   title: string;
@@ -9,6 +12,8 @@ interface AuthShellProps {
 }
 
 export function AuthShell({ title, subtitle, children, footer }: AuthShellProps) {
+  const { t } = useLanguage();
+
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -26,7 +31,7 @@ export function AuthShell({ title, subtitle, children, footer }: AuthShellProps)
 
         <p className="mt-8 text-center text-[11px] text-gray-600">
           <Link href="/" className="hover:text-gray-400 transition-colors">
-            ← Back to home
+            {t('common.backHome')}
           </Link>
         </p>
       </div>

@@ -17,6 +17,7 @@ import {
   type PestPredictionResult,
 } from '../utils/pestPrediction';
 import type { PestRisk, PestProblem, PestRiskLevel, Severity, PestStatus } from '../types';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface PestRiskProps {
   pestRisks: PestRisk[];
@@ -70,6 +71,7 @@ const emptyReportForm = {
 };
 
 export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
+  const { t } = useLanguage();
   const [reportForm, setReportForm] = useState(emptyReportForm);
   const [predictionForm, setPredictionForm] = useState<PestPredictionFormState>(
     createPredictionFormFromSubstrate()
@@ -138,10 +140,8 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
     <div className="space-y-6 max-w-3xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-100">Pest Risk Monitor</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Track pest issues and review qualitative risk assessments
-          </p>
+          <h1 className="text-xl font-bold text-gray-100">{t('pages.pestTitle')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t('pages.pestSubtitle')}</p>
         </div>
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[10px] font-semibold text-amber-300 uppercase tracking-wide">
           <Lock className="w-3 h-3" />

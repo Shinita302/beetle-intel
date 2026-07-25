@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import { AlertTriangle, Database, RotateCcw, Trash2, UserX } from 'lucide-react';
 import { Card, CardHeader } from '../components/ui/Card';
@@ -5,6 +7,8 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { FormField, TextInput } from '../components/ui/FormField';
+import { LanguageSwitcher } from '../layout/LanguageSwitcher';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface SettingsProps {
   userEmail?: string;
@@ -30,6 +34,7 @@ export function Settings({
   onRestoreDemo,
   onDeleteAccount,
 }: SettingsProps) {
+  const { t } = useLanguage();
   const [confirmText, setConfirmText] = useState('');
   const [accountConfirmText, setAccountConfirmText] = useState('');
   const [cleared, setCleared] = useState(false);
@@ -72,7 +77,9 @@ export function Settings({
       setAccountConfirmText('');
       setAccountDeleted(true);
     } catch (err) {
-      setDeleteAccountError(err instanceof Error ? err.message : 'Could not delete account.');
+      setDeleteAccountError(
+        err instanceof Error ? err.message : t('settings.deleteAccountError')
+      );
     } finally {
       setDeletingAccount(false);
     }
@@ -81,22 +88,23 @@ export function Settings({
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-xl font-bold text-gray-100">Settings</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          All breeding data syncs to your account and appears on any device after you log in
-        </p>
+        <h1 className="text-xl font-bold text-gray-100">{t('settings.title')}</h1>
+        <p className="text-sm text-gray-500 mt-0.5">{t('settings.subtitle')}</p>
       </div>
 
       <Card>
-        <CardHeader title="Account" subtitle="Your BeetleIntel login" />
+        <CardHeader title={t('settings.languageTitle')} subtitle={t('settings.languageSubtitle')} />
+        <LanguageSwitcher />
+      </Card>
+
+      <Card>
+        <CardHeader title={t('settings.accountTitle')} subtitle={t('settings.accountSubtitle')} />
         <div className="space-y-3">
-          <p className="text-sm text-gray-300">{userEmail || 'Signed in'}</p>
-          <p className="text-xs text-gray-500">
-            Deleting your account permanently removes your login and all synced breeding data.
-          </p>
+          <p className="text-sm text-gray-300">{userEmail || t('common.signedIn')}</p>
+          <p className="text-xs text-gray-500">{t('settings.deleteAccountHint')}</p>
           <FormField
-            label={`Type ${DELETE_ACCOUNT_PHRASE} to confirm`}
-            hint="Case insensitive"
+            label={t('settings.typeConfirm', { phrase: DELETE_ACCOUNT_PHRASE })}
+            hint={t('common.caseInsensitive')}
           >
             <TextInput
               value={accountConfirmText}
@@ -114,44 +122,41 @@ export function Settings({
             disabled={!canDeleteAccount || deletingAccount}
           >
             <UserX className="w-4 h-4" />
-            Delete account
+            {t('settings.deleteAccount')}
           </Button>
-          {accountDeleted && <Badge variant="success">Account deleted</Badge>}
+          {accountDeleted && <Badge variant="success">{t('settings.accountDeleted')}</Badge>}
         </div>
       </Card>
 
       <Card>
-        <CardHeader
-          title="Your data"
-          subtitle="Beetles, growth logs, inventory, pairings, and pest notes in Supabase"
-        />
+        <CardHeader title={t('settings.yourDataTitle')} subtitle={t('settings.yourDataSubtitle')} />
         <div className="flex flex-wrap gap-2">
-          <Badge variant="info">{beetleCount} beetles</Badge>
-          <Badge variant="neutral">{larvalCount} growth records</Badge>
-          <Badge variant="neutral">{pairingCount} pairings</Badge>
-          <Badge variant="neutral">{pestCount} pest logs</Badge>
+          <Badge variant="info">{t('settings.beetles', { count: beetleCount })}</Badge>
+          <Badge variant="neutral">{t('settings.growthRecords', { count: larvalCount })}</Badge>
+          <Badge variant="neutral">{t('settings.pairings', { count: pairingCount })}</Badge>
+          <Badge variant="neutral">{t('settings.pestLogs', { count: pestCount })}</Badge>
         </div>
         {totalRecords === 0 && (
-          <p className="text-sm text-gray-500 mt-3">No breeding data saved yet.</p>
+          <p className="text-sm text-gray-500 mt-3">{t('settings.noDataYet')}</p>
         )}
       </Card>
 
       <Card>
         <CardHeader
-          title="Delete all breeding data"
-          subtitle="Removes beetles, growth records, pairings, pest logs, and inventory — keeps your login"
+          title={t('settings.deleteDataTitle')}
+          subtitle={t('settings.deleteDataSubtitle')}
         />
 
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 mb-4">
           <p className="text-sm text-amber-200 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            This cannot be undone. Your account stays active — only the breeding data is removed.
+            {t('settings.deleteDataWarning')}
           </p>
         </div>
 
         <FormField
-          label={`Type ${CLEAR_DATA_PHRASE} to confirm`}
-          hint="Case insensitive"
+          label={t('settings.typeConfirm', { phrase: CLEAR_DATA_PHRASE })}
+          hint={t('common.caseInsensitive')}
         >
           <TextInput
             value={confirmText}
@@ -169,37 +174,36 @@ export function Settings({
             className="!bg-red-600 hover:!bg-red-500 disabled:!bg-gray-800 disabled:!text-gray-600"
           >
             <Trash2 className="w-4 h-4" />
-            Delete everything
+            {t('settings.deleteEverything')}
           </Button>
-          {cleared && <Badge variant="success">All data deleted</Badge>}
+          {cleared && <Badge variant="success">{t('settings.allDataDeleted')}</Badge>}
         </div>
       </Card>
 
       <Card>
-        <CardHeader
-          title="Restore sample data"
-          subtitle="Reload the built-in demo beetles and records (replaces current data)"
-        />
-        <p className="text-xs text-gray-500 mb-4">
-          Use this after deleting everything, or if you want to start over with example profiles.
-        </p>
+        <CardHeader title={t('settings.restoreTitle')} subtitle={t('settings.restoreSubtitle')} />
+        <p className="text-xs text-gray-500 mb-4">{t('settings.restoreHint')}</p>
         <Button type="button" variant="secondary" onClick={handleRestore}>
           <RotateCcw className="w-4 h-4" />
-          Restore demo data
+          {t('settings.restoreDemo')}
         </Button>
-        {restored && <Badge variant="success" className="ml-3">Demo data restored</Badge>}
+        {restored && (
+          <Badge variant="success" className="ml-3">
+            {t('settings.demoRestored')}
+          </Badge>
+        )}
       </Card>
 
       <p className="text-[11px] text-gray-600 flex items-center gap-1.5">
         <Database className="w-3.5 h-3.5" />
-        Breeding data is stored in your Supabase account and syncs across browsers when you log in.
+        {t('settings.footerSync')}
       </p>
 
       <ConfirmDialog
         open={deleteAccountOpen}
-        title="Delete your account?"
-        message="This permanently deletes your login, beetles, growth logs, inventory, pairings, and pest notes. This cannot be undone."
-        confirmLabel={deletingAccount ? 'Deleting…' : 'Delete account'}
+        title={t('settings.deleteAccountDialogTitle')}
+        message={t('settings.deleteAccountDialogMessage')}
+        confirmLabel={deletingAccount ? t('settings.deleting') : t('settings.deleteAccount')}
         confirmVariant="danger"
         onConfirm={handleDeleteAccount}
         onCancel={() => {

@@ -14,6 +14,7 @@ import {
   validatePairingOutcomes,
   type PairingOutcomesErrors,
 } from '@/utils/pairingOutcomesValidation';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface PairingFertilityProps {
   beetles: Beetle[];
@@ -146,6 +147,7 @@ function PairingOutcomeFields({
 }
 
 export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: PairingFertilityProps) {
+  const { t } = useLanguage();
   const [activePairingId, setActivePairingId] = useState<string | null>(null);
   const [form, setForm] = useState<PairingFormState>(emptyForm);
   const [saved, setSaved] = useState(false);
@@ -200,10 +202,8 @@ export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: Pairing
     <div className="space-y-6 max-w-3xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-100">Pairing & Fertility</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Log a pairing first, then return to the same record as eggs hatch and adults emerge
-          </p>
+          <h1 className="text-xl font-bold text-gray-100">{t('pages.pairingTitle')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t('pages.pairingSubtitle')}</p>
         </div>
         {isEditing && (
           <Button type="button" variant="secondary" size="sm" onClick={startNewPairing}>

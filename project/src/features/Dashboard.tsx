@@ -35,6 +35,7 @@ import {
   totalPopulationInventory,
 } from '../types';
 import { beetleCountTrend, larvalActivityTrend } from '../utils/dashboardMetrics';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   ALL_SPECIES_FILTER,
   calcAvgHatchRate,
@@ -111,6 +112,7 @@ export function Dashboard({
   pestRisks,
   onNavigate,
 }: DashboardProps) {
+  const { t } = useLanguage();
   const [speciesFilter, setSpeciesFilter] = useState(ALL_SPECIES_FILTER);
 
   const speciesOptions = useMemo(
@@ -180,8 +182,8 @@ export function Dashboard({
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-100">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Breeding intelligence overview</p>
+          <h1 className="text-xl font-bold text-gray-100">{t('pages.dashboardTitle')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t('pages.dashboardSubtitle')}</p>
         </div>
         <FormField label="Species" className="w-full sm:w-64">
           <SelectInput

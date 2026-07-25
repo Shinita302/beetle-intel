@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import {
   LayoutDashboard,
@@ -12,6 +14,7 @@ import {
   Package,
 } from 'lucide-react';
 import { PAGE_ROUTES, pathnameToPage } from '@/lib/dashboardRoutes';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export { pathnameToPage };
 
@@ -25,15 +28,15 @@ export type Page =
   | 'pest-risk'
   | 'settings';
 
-const navItems: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'add-beetle', label: 'Add Beetle', icon: Bug },
-  { id: 'inventory', label: 'Inventory', icon: Package },
-  { id: 'import-spreadsheet', label: 'Import Spreadsheet', icon: FileSpreadsheet },
-  { id: 'larval-growth', label: 'Growth Tracking', icon: Sprout },
-  { id: 'pairing', label: 'Pairing & Fertility', icon: HeartHandshake },
-  { id: 'pest-risk', label: 'Pest Risk', icon: ShieldAlert },
-  { id: 'settings', label: 'Settings', icon: Settings },
+const navItems: { id: Page; labelKey: string; icon: typeof LayoutDashboard }[] = [
+  { id: 'dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+  { id: 'add-beetle', labelKey: 'nav.addBeetle', icon: Bug },
+  { id: 'inventory', labelKey: 'nav.inventory', icon: Package },
+  { id: 'import-spreadsheet', labelKey: 'nav.importSpreadsheet', icon: FileSpreadsheet },
+  { id: 'larval-growth', labelKey: 'nav.larvalGrowth', icon: Sprout },
+  { id: 'pairing', labelKey: 'nav.pairing', icon: HeartHandshake },
+  { id: 'pest-risk', labelKey: 'nav.pestRisk', icon: ShieldAlert },
+  { id: 'settings', labelKey: 'nav.settings', icon: Settings },
 ];
 
 interface SidebarProps {
@@ -44,6 +47,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ currentPage, onNavigate, mobileOpen, onCloseMobile }: SidebarProps) {
+  const { t } = useLanguage();
+
   return (
     <>
       {mobileOpen && (
@@ -65,7 +70,7 @@ export function Sidebar({ currentPage, onNavigate, mobileOpen, onCloseMobile }: 
             </div>
             <div>
               <h1 className="text-sm font-bold text-gray-100 tracking-tight">BeetleIntel</h1>
-              <p className="text-[10px] text-gray-500 font-medium">Breeding Intelligence</p>
+              <p className="text-[10px] text-gray-500 font-medium">{t('brand.tagline')}</p>
             </div>
           </div>
           <button className="lg:hidden text-gray-500 hover:text-gray-300" onClick={onCloseMobile}>
@@ -92,7 +97,7 @@ export function Sidebar({ currentPage, onNavigate, mobileOpen, onCloseMobile }: 
                 }`}
               >
                 <Icon className="w-4 h-4" />
-                {item.label}
+                {t(item.labelKey)}
               </Link>
             );
           })}
