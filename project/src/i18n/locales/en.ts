@@ -1,4 +1,4 @@
-import type { MessageTree } from './types';
+import type { MessageTree } from '../types';
 
 const en = {
   brand: {

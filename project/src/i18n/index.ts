@@ -11,8 +11,8 @@ import {
 export { DEFAULT_LOCALE, LOCALES, LOCALE_STORAGE_KEY, type Locale } from './types';
 
 const dictionaries: Record<Locale, MessageTree> = {
-  en,
-  ko,
+  en: en as MessageTree,
+  ko: ko as MessageTree,
 };
 
 export function t(
