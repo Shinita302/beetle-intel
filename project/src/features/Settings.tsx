@@ -7,7 +7,7 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { FormField, TextInput } from '../components/ui/FormField';
-import { LanguageSwitcher } from '../layout/LanguageSwitcher';
+import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface SettingsProps {
