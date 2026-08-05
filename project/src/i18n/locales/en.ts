@@ -2,6 +2,7 @@ import type { MessageTree } from '../types';
 
 const en = {
   brand: {
+    name: 'BeetleIntel',
     tagline: 'Breeding Intelligence',
   },
   common: {
@@ -62,9 +63,35 @@ const en = {
     pestTitle: 'Pest Risk Monitor',
     pestSubtitle: 'Track pest issues and review qualitative risk assessments',
     importTitle: 'Import Spreadsheet',
-    importSubtitle: 'Bring in inventory and growth data from Excel or CSV',
+    importSubtitle: 'Hybrid import: automatic population groups with editable preview before saving.',
     dashboardTitle: 'Dashboard',
     dashboardSubtitle: 'Breeding intelligence overview',
+  },
+  addBeetle: {
+    advancedDetails: 'Advanced Details',
+    saveBeetle: 'Save Beetle',
+  },
+  inventory: {
+    addSpecies: 'Add Species',
+    totalSpecies: 'Total Species',
+    populationTable: 'Population Table',
+    speciesCount: '{count} species',
+    searchSpecies: 'Search species...',
+    species: 'Species',
+    eggs: 'Eggs',
+    prePupa: 'Pre-Pupa',
+    pupa: 'Pupa',
+    adult: 'Adult',
+    total: 'Total',
+    actions: 'Actions',
+  },
+  pairing: {
+    male: 'Male',
+    female: 'Female',
+    selectMale: 'Select male',
+    selectFemale: 'Select female',
+    pairingDate: 'Pairing Date',
+    savePairing: 'Save Pairing',
   },
   settings: {
     title: 'Settings',

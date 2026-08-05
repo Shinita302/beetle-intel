@@ -69,7 +69,7 @@ export function Sidebar({ currentPage, onNavigate, mobileOpen, onCloseMobile }: 
               <Bug className="w-4.5 h-4.5 text-white" />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-gray-100 tracking-tight">BeetleIntel</h1>
+              <h1 className="text-sm font-bold text-gray-100 tracking-tight">{t('brand.name')}</h1>
               <p className="text-[10px] text-gray-500 font-medium">{t('brand.tagline')}</p>
             </div>
           </div>

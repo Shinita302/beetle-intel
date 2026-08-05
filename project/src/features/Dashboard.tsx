@@ -420,12 +420,14 @@ export function Dashboard({
       <Card>
         <CardHeader title="Quick Actions" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { label: 'Add Beetle', page: 'add-beetle', icon: Bug },
-            { label: 'Log Growth', page: 'larval-growth', icon: Sprout },
-            { label: 'New Pairing', page: 'pairing', icon: HeartHandshake },
-            { label: 'Report Pest', page: 'pest-risk', icon: ShieldAlert },
-          ].map((item) => {
+          {(
+            [
+              { label: t('nav.addBeetle'), page: 'add-beetle' as const, icon: Bug },
+              { label: 'Log Growth', page: 'larval-growth' as const, icon: Sprout },
+              { label: 'New Pairing', page: 'pairing' as const, icon: HeartHandshake },
+              { label: 'Report Pest', page: 'pest-risk' as const, icon: ShieldAlert },
+            ] as const
+          ).map((item) => {
             const Icon = item.icon;
             return (
               <button

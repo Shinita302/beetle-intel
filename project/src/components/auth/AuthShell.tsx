@@ -18,7 +18,7 @@ export function AuthShell({ title, subtitle, children, footer }: AuthShellProps)
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <p className="text-xs font-mono text-sky-400/80 mb-2">BeetleIntel</p>
+          <p className="text-xs font-mono text-sky-400/80 mb-2">{t('brand.name')}</p>
           <h1 className="text-2xl font-bold text-gray-100">{title}</h1>
           <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
         </div>

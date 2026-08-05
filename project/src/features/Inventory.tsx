@@ -25,17 +25,23 @@ interface InventoryProps {
 type SortKey = 'species' | SpeciesInventoryStageKey | 'total';
 type SortDir = 'asc' | 'desc';
 
-const STAGE_COLUMNS: { key: SpeciesInventoryStageKey; label: string }[] = [
-  { key: 'eggs', label: 'Eggs' },
-  { key: 'l1', label: 'L1' },
-  { key: 'l2', label: 'L2' },
-  { key: 'l3', label: 'L3' },
-  { key: 'prePupa', label: 'Pre-Pupa' },
-  { key: 'pupa', label: 'Pupa' },
-  { key: 'adult', label: 'Adult' },
+const STAGE_COLUMNS: { key: SpeciesInventoryStageKey; labelKey: string }[] = [
+  { key: 'eggs', labelKey: 'inventory.eggs' },
+  { key: 'l1', labelKey: 'L1' },
+  { key: 'l2', labelKey: 'L2' },
+  { key: 'l3', labelKey: 'L3' },
+  { key: 'prePupa', labelKey: 'inventory.prePupa' },
+  { key: 'pupa', labelKey: 'inventory.pupa' },
+  { key: 'adult', labelKey: 'inventory.adult' },
 ];
 
 const PAGE_SIZE = 8;
+
+function stageLabel(t: (key: string) => string, labelKey: string): string {
+  // L1/L2/L3 stay as literal English stage codes (Column C blank / codes)
+  if (labelKey === 'L1' || labelKey === 'L2' || labelKey === 'L3') return labelKey;
+  return t(labelKey);
+}
 
 export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryProps) {
   const { t } = useLanguage();
@@ -159,12 +165,12 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
         </div>
         <Button type="button" variant="primary" size="sm" onClick={startAdd}>
           <Plus className="w-4 h-4" />
-          Add Species
+          {t('inventory.addSpecies')}
         </Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard label="Total Species" value={summary.totalSpecies} icon={Bug} color="bg-sky-500/15 text-sky-400" />
+        <StatCard label={t('inventory.totalSpecies')} value={summary.totalSpecies} icon={Bug} color="bg-sky-500/15 text-sky-400" />
         <StatCard label="Total Population" value={summary.totalPopulation} icon={Users} color="bg-teal-500/15 text-teal-400" />
         <StatCard label="Active Larvae" value={summary.activeLarvae} icon={Sprout} color="bg-emerald-500/15 text-emerald-400" />
         <StatCard label="Adults" value={summary.adults} icon={Egg} color="bg-amber-500/15 text-amber-400" />
@@ -172,7 +178,7 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
 
       {showAdd && (
         <Card>
-          <CardHeader title="Add Species" subtitle="Start tracking a new species in your collection" />
+          <CardHeader title={t('inventory.addSpecies')} subtitle="Start tracking a new species in your collection" />
           <div className="flex flex-wrap gap-3 items-end">
             <FormField label="Species name" className="flex-1 min-w-[220px]">
               <TextInput
@@ -193,8 +199,8 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
         <Card>
           <CardHeader title={`Edit: ${draft.species}`} subtitle="Update population counts" />
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-            {STAGE_COLUMNS.map(({ key, label }) => (
-              <FormField key={key} label={label}>
+            {STAGE_COLUMNS.map(({ key, labelKey }) => (
+              <FormField key={key} label={stageLabel(t, labelKey)}>
                 <NumberInput
                   value={draft[key]}
                   onChange={(v) => setDraft((prev) => (prev ? { ...prev, [key]: v } : prev))}
@@ -219,7 +225,7 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div className="flex flex-wrap items-center gap-3">
-            <CardHeader title="Population Table" subtitle={`${filtered.length} species`} />
+            <CardHeader title={t('inventory.populationTable')} subtitle={t('inventory.speciesCount', { count: filtered.length })} />
             {deleteSuccess && <Badge variant="success">Population record deleted</Badge>}
           </div>
           <div className="relative w-full sm:w-64">
@@ -231,7 +237,7 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
                 setSearch(e.target.value);
                 setPage(0);
               }}
-              placeholder="Search species…"
+              placeholder={t('inventory.searchSpecies')}
               className="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
             />
           </div>
@@ -243,22 +249,22 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
               <tr className="border-b border-gray-800">
                 <th className="text-left py-2 pr-3">
                   <button type="button" className="text-gray-500 font-medium hover:text-gray-300" onClick={() => toggleSort('species')}>
-                    Species{sortIndicator('species')}
+                    {t('inventory.species')}{sortIndicator('species')}
                   </button>
                 </th>
-                {STAGE_COLUMNS.map(({ key, label }) => (
+                {STAGE_COLUMNS.map(({ key, labelKey }) => (
                   <th key={key} className="text-right py-2 px-2">
                     <button type="button" className="text-gray-500 font-medium hover:text-gray-300" onClick={() => toggleSort(key)}>
-                      {label}{sortIndicator(key)}
+                      {stageLabel(t, labelKey)}{sortIndicator(key)}
                     </button>
                   </th>
                 ))}
                 <th className="text-right py-2 pl-2">
                   <button type="button" className="text-gray-500 font-medium hover:text-gray-300" onClick={() => toggleSort('total')}>
-                    Total{sortIndicator('total')}
+                    {t('inventory.total')}{sortIndicator('total')}
                   </button>
                 </th>
-                <th className="text-right py-2 pl-2 text-gray-500 font-medium">Actions</th>
+                <th className="text-right py-2 pl-2 text-gray-500 font-medium">{t('inventory.actions')}</th>
               </tr>
             </thead>
             <tbody>

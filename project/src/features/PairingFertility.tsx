@@ -231,7 +231,7 @@ export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: Pairing
               onChange={(selection) => setForm((prev) => ({ ...prev, ...selection }))}
             />
 
-            <FormField label="Pairing Date" required>
+            <FormField label={t('pairing.pairingDate')} required>
               <TextInput
                 type="date"
                 value={form.pairingDate}
@@ -257,7 +257,7 @@ export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: Pairing
             </div>
             <Button type="submit" variant="primary" disabled={!canSave}>
               <Save className="w-4 h-4" />
-              {isEditing ? 'Save changes' : 'Save Pairing'}
+              {isEditing ? 'Save changes' : t('pairing.savePairing')}
             </Button>
           </div>
         </Card>

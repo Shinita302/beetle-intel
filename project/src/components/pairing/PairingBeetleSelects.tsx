@@ -8,6 +8,7 @@ import {
   reconcilePairingBeetleSelection,
   type PairingBeetleSelection,
 } from '@/utils/pairingBeetleFilters';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const selectClassName =
   'w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors appearance-none';
@@ -25,6 +26,7 @@ function beetleOptionLabel(beetles: Beetle[], beetle: Beetle): string {
 }
 
 export function PairingBeetleSelects({ beetles, selection, onChange }: PairingBeetleSelectsProps) {
+  const { t } = useLanguage();
   const eligibleMales = useMemo(
     () => filterMalesForPairing(beetles, selection.femaleBeetleId),
     [beetles, selection.femaleBeetleId]
@@ -44,7 +46,7 @@ export function PairingBeetleSelects({ beetles, selection, onChange }: PairingBe
 
   return (
     <>
-      <FormField label="Male" required>
+      <FormField label={t('pairing.male')} required>
         <select
           value={selection.maleBeetleId}
           onChange={(e) => handleMaleChange(e.target.value)}
@@ -54,7 +56,7 @@ export function PairingBeetleSelects({ beetles, selection, onChange }: PairingBe
           <option value="" disabled>
             {selection.femaleBeetleId && eligibleMales.length === 0
               ? 'No males of this species'
-              : 'Select male'}
+              : t('pairing.selectMale')}
           </option>
           {eligibleMales.map((beetle) => (
             <option key={beetle.id} value={beetle.id}>
@@ -64,7 +66,7 @@ export function PairingBeetleSelects({ beetles, selection, onChange }: PairingBe
         </select>
       </FormField>
 
-      <FormField label="Female" required>
+      <FormField label={t('pairing.female')} required>
         <select
           value={selection.femaleBeetleId}
           onChange={(e) => handleFemaleChange(e.target.value)}
@@ -74,7 +76,7 @@ export function PairingBeetleSelects({ beetles, selection, onChange }: PairingBe
           <option value="" disabled>
             {selection.maleBeetleId && eligibleFemales.length === 0
               ? 'No females of this species'
-              : 'Select female'}
+              : t('pairing.selectFemale')}
           </option>
           {eligibleFemales.map((beetle) => (
             <option key={beetle.id} value={beetle.id}>

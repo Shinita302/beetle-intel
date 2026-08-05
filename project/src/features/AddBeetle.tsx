@@ -187,6 +187,7 @@ function AdvancedSection({
   form: FormState;
   onChange: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
 }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
 
   return (
@@ -196,7 +197,7 @@ function AdvancedSection({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between text-sm font-semibold text-gray-200"
       >
-        Advanced Details
+        {t('addBeetle.advancedDetails')}
         {open ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
       </button>
       {open && (
@@ -451,7 +452,7 @@ export function AddBeetle({ beetles, growthEntries = [], onAdd, onUpdate }: AddB
             <div>{saved && <Badge variant="success">Beetle added!</Badge>}</div>
             <Button type="submit" variant="primary">
               <Save className="w-4 h-4" />
-              Save Beetle
+              {t('addBeetle.saveBeetle')}
             </Button>
           </div>
         </Card>
