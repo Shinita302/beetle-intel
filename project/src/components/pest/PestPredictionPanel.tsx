@@ -3,9 +3,22 @@ import { FormField, TextInput, NumberInput } from '../ui/FormField';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { SubstrateTypeField } from '../forms/SubstrateTypeField';
-import { parseSubstrateType, resolveSubstrateType } from '../../constants/substrate';
+import {
+  parseSubstrateType,
+  resolveSubstrateType,
+  SUBSTRATE_CUSTOM,
+  SUBSTRATE_PRESET_OPTIONS,
+} from '../../constants/substrate';
 import { PEST_RISK_LEVEL_LABEL, type PestPredictionResult } from '../../utils/pestPrediction';
 import type { PestRiskLevel } from '../../types';
+import { useLanguage } from '@/contexts/LanguageContext';
+
+const substrateLabelKeys: Record<string, string> = {
+  'Flake Soil': 'pest.flakeSoil',
+  'Kinshi + Flake': 'pest.kinshiFlake',
+  'Kinshi Block': 'pest.kinshiBlock',
+  [SUBSTRATE_CUSTOM]: 'pest.custom',
+};
 
 export interface PestPredictionFormState {
   substrateSelection: string;
@@ -36,6 +49,12 @@ export function PestPredictionPanel({
   onRunPrediction,
   loading = false,
 }: PestPredictionPanelProps) {
+  const { t } = useLanguage();
+  const substrateOptions = SUBSTRATE_PRESET_OPTIONS.map((o) => ({
+    value: o.value,
+    label: t(substrateLabelKeys[o.value]),
+  }));
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -45,11 +64,13 @@ export function PestPredictionPanel({
             customValue={form.substrateCustom}
             onSelectionChange={(v) => onChange('substrateSelection', v)}
             onCustomChange={(v) => onChange('substrateCustom', v)}
-            hint="Substrate moisture profile affects mold and mite risk."
+            label={t('pest.substrateType')}
+            hint={t('pest.substrateHint')}
+            options={substrateOptions}
           />
         </div>
 
-        <FormField label="Temperature (°C)">
+        <FormField label={t('pest.temperature')}>
           <NumberInput
             value={form.temperature}
             onChange={(v) => onChange('temperature', v)}
@@ -59,7 +80,7 @@ export function PestPredictionPanel({
           />
         </FormField>
 
-        <FormField label="Humidity (%)">
+        <FormField label={t('pest.humidity')}>
           <NumberInput
             value={form.humidity}
             onChange={(v) => onChange('humidity', v)}
@@ -69,11 +90,11 @@ export function PestPredictionPanel({
           />
         </FormField>
 
-        <FormField label="Type of Food Fed" className="md:col-span-2">
+        <FormField label={t('pest.foodType')} className="md:col-span-2">
           <TextInput
             value={form.foodType}
             onChange={(v) => onChange('foodType', v)}
-            placeholder="e.g. Flake soil protein, banana, kinshi"
+            placeholder={t('pest.foodPlaceholder')}
           />
         </FormField>
       </div>
@@ -81,10 +102,10 @@ export function PestPredictionPanel({
       <div className="flex flex-wrap items-center gap-3">
         <Button type="button" variant="primary" onClick={onRunPrediction} disabled={loading}>
           <Brain className="w-4 h-4" />
-          {loading ? 'Analyzing…' : 'Assess Pest Risk'}
+          {loading ? 'Analyzing…' : t('pest.assess')}
         </Button>
         <span className="text-[11px] text-gray-500">
-          Uses placeholder logic until AI is connected
+          {t('pest.placeholderLogic')}
         </span>
       </div>
 

@@ -41,11 +41,22 @@ const sexOptions: { value: BeetleSex; label: string }[] = [
   { value: 'unknown', label: 'Unknown / Unsexed' },
 ];
 
-const instarOptions: { value: LarvalInstar; label: string }[] = [
-  { value: 'L1', label: 'L1' },
-  { value: 'L2', label: 'L2' },
-  { value: 'L3', label: 'L3' },
+const instarOptions: { value: LarvalInstar; labelKey: string }[] = [
+  { value: 'L1', labelKey: 'addBeetle.l1' },
+  { value: 'L2', labelKey: 'addBeetle.l2' },
+  { value: 'L3', labelKey: 'addBeetle.l3' },
 ];
+
+const sexLabelKeys: Record<BeetleSex, string> = {
+  male: 'addBeetle.male',
+  female: 'addBeetle.female',
+  unknown: 'addBeetle.unknownSex',
+};
+
+const originLabelKeys: Record<BeetleOrigin, string> = {
+  CB: 'addBeetle.captiveBred',
+  WC: 'addBeetle.wildCaught',
+};
 
 const emptyForm = {
   name: '',
@@ -123,16 +134,17 @@ function LarvalInstarField({
   value: LarvalInstar;
   onChange: (value: LarvalInstar) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <FormField
-      label="Instar"
+      label={t('addBeetle.instar')}
       required
-      hint="Same L1 / L2 / L3 stages as Inventory."
+      hint={t('addBeetle.instarHint')}
     >
       <SelectInput
         value={value}
         onChange={(v) => onChange(v as LarvalInstar)}
-        options={instarOptions}
+        options={instarOptions.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
       />
     </FormField>
   );
@@ -156,15 +168,16 @@ function BeetleBodyMetricField({
   error?: string;
   onChange: (value: number) => void;
 }) {
+  const { t } = useLanguage();
   const usesWeight = beetleUsesWeightMetric(status);
 
   return (
     <FormField
-      label={usesWeight ? 'Weight (g)' : 'Size (mm)'}
+      label={usesWeight ? t('addBeetle.weight') : 'Size (mm)'}
       error={error}
       hint={
         usesWeight
-          ? 'Current body weight in grams — most useful for larvae and pupae.'
+          ? t('addBeetle.weightHint')
           : 'Body length in millimeters for adult beetles.'
       }
     >
@@ -234,6 +247,15 @@ export function AddBeetle({ beetles, growthEntries = [], onAdd, onUpdate }: AddB
 
   const nextId = `B-${String(beetles.length + 1).padStart(3, '0')}`;
   const editingBeetle = beetles.find((b) => b.id === editBeetleId);
+
+  const statusSelectOptions = statusOptions.map((o) =>
+    o.value === 'larva' ? { ...o, label: t('addBeetle.larva') } : o
+  );
+  const sexSelectOptions = sexOptions.map((o) => ({ ...o, label: t(sexLabelKeys[o.value]) }));
+  const originSelectOptions = BEETLE_ORIGIN_OPTIONS.map((o) => ({
+    ...o,
+    label: t(originLabelKeys[o.value]),
+  }));
 
   const validate = (state: FormState): FormErrors => {
     const next: FormErrors = {};
@@ -357,23 +379,23 @@ export function AddBeetle({ beetles, growthEntries = [], onAdd, onUpdate }: AddB
 
       <form onSubmit={handleSubmit} noValidate>
         <Card>
-          <CardHeader title="Beetle Profile" subtitle={`ID: ${nextId}`} />
+          <CardHeader title={t('addBeetle.profileTitle')} subtitle={t('addBeetle.idLabel', { id: nextId })} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField label="Species" required error={errors.species}>
+            <FormField label={t('addBeetle.species')} required error={errors.species}>
               <TextInput
                 value={form.species}
                 onChange={(v) => update('species', v)}
-                placeholder="e.g. Dorcus titanus palawanicus"
+                placeholder={t('addBeetle.speciesPlaceholder')}
                 invalid={Boolean(errors.species)}
               />
             </FormField>
 
-            <FormField label="Status" required>
+            <FormField label={t('addBeetle.status')} required>
               <SelectInput
                 value={form.status}
                 onChange={(v) => update('status', v as BeetleStatus)}
-                options={statusOptions}
+                options={statusSelectOptions}
               />
             </FormField>
 
@@ -384,37 +406,37 @@ export function AddBeetle({ beetles, growthEntries = [], onAdd, onUpdate }: AddB
               />
             )}
 
-            <FormField label="Name / Nickname">
+            <FormField label={t('addBeetle.name')}>
               <TextInput
                 value={form.name}
                 onChange={(v) => update('name', v)}
-                placeholder="e.g. Titan (optional)"
+                placeholder={t('addBeetle.namePlaceholder')}
               />
             </FormField>
 
-            <FormField label="Sex">
+            <FormField label={t('addBeetle.sex')}>
               <SelectInput
                 value={form.sex}
                 onChange={(v) => update('sex', v as BeetleSex)}
-                options={sexOptions}
+                options={sexSelectOptions}
               />
             </FormField>
 
-            <FormField label="Generation" error={errors.generation}>
+            <FormField label={t('addBeetle.generation')} error={errors.generation}>
               <TextInput
                 value={form.generation}
                 onChange={(v) => update('generation', v)}
-                placeholder="e.g. F1, F2, F20"
+                placeholder={t('addBeetle.generationPlaceholder')}
                 invalid={Boolean(errors.generation)}
               />
             </FormField>
 
-            <FormField label="Origin" required error={errors.origin}>
+            <FormField label={t('addBeetle.origin')} required error={errors.origin}>
               <SelectInput
                 value={form.origin}
                 onChange={(v) => update('origin', v as BeetleOrigin)}
-                options={BEETLE_ORIGIN_OPTIONS}
-                placeholder="Select origin…"
+                options={originSelectOptions}
+                placeholder={t('addBeetle.selectOrigin')}
                 invalid={Boolean(errors.origin)}
               />
             </FormField>
@@ -426,20 +448,20 @@ export function AddBeetle({ beetles, growthEntries = [], onAdd, onUpdate }: AddB
               onChange={(v) => update('sizeMm', v)}
             />
 
-            <FormField label="Color" error={errors.color}>
+            <FormField label={t('addBeetle.color')} error={errors.color}>
               <TextInput
                 value={form.color}
                 onChange={(v) => update('color', v)}
-                placeholder="e.g. Metallic Green, Rainbow, Blue, Red"
+                placeholder={t('addBeetle.colorPlaceholder')}
                 invalid={Boolean(errors.color)}
               />
             </FormField>
 
-            <FormField label="Notes" className="md:col-span-2">
+            <FormField label={t('addBeetle.notes')} className="md:col-span-2">
               <textarea
                 value={form.notes}
                 onChange={(e) => update('notes', e.target.value)}
-                placeholder="General observations about this beetle…"
+                placeholder={t('addBeetle.notesPlaceholder')}
                 rows={3}
                 className="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:ring-1 focus:ring-sky-500/50 focus:border-sky-500/50 transition-colors resize-none"
               />
@@ -477,18 +499,18 @@ export function AddBeetle({ beetles, growthEntries = [], onAdd, onUpdate }: AddB
             {editForm && editingBeetle && (
               <div className="mt-5 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField label="Species" required error={editErrors.species}>
+                  <FormField label={t('addBeetle.species')} required error={editErrors.species}>
                     <TextInput
                       value={editForm.species}
                       onChange={(v) => updateEdit('species', v)}
                       invalid={Boolean(editErrors.species)}
                     />
                   </FormField>
-                  <FormField label="Status" required>
+                  <FormField label={t('addBeetle.status')} required>
                     <SelectInput
                       value={editForm.status}
                       onChange={(v) => updateEdit('status', v as BeetleStatus)}
-                      options={statusOptions}
+                      options={statusSelectOptions}
                     />
                   </FormField>
                   {editForm.status === 'larva' && (
@@ -497,30 +519,30 @@ export function AddBeetle({ beetles, growthEntries = [], onAdd, onUpdate }: AddB
                       onChange={(v) => updateEdit('instarStage', v)}
                     />
                   )}
-                  <FormField label="Name / Nickname">
+                  <FormField label={t('addBeetle.name')}>
                     <TextInput value={editForm.name} onChange={(v) => updateEdit('name', v)} />
                   </FormField>
-                  <FormField label="Sex">
+                  <FormField label={t('addBeetle.sex')}>
                     <SelectInput
                       value={editForm.sex}
                       onChange={(v) => updateEdit('sex', v as BeetleSex)}
-                      options={sexOptions}
+                      options={sexSelectOptions}
                     />
                   </FormField>
-                  <FormField label="Generation" error={editErrors.generation}>
+                  <FormField label={t('addBeetle.generation')} error={editErrors.generation}>
                     <TextInput
                       value={editForm.generation}
                       onChange={(v) => updateEdit('generation', v)}
-                      placeholder="e.g. F1, F2, F20"
+                      placeholder={t('addBeetle.generationPlaceholder')}
                       invalid={Boolean(editErrors.generation)}
                     />
                   </FormField>
-                  <FormField label="Origin" required error={editErrors.origin}>
+                  <FormField label={t('addBeetle.origin')} required error={editErrors.origin}>
                     <SelectInput
                       value={editForm.origin}
                       onChange={(v) => updateEdit('origin', v as BeetleOrigin)}
-                      options={BEETLE_ORIGIN_OPTIONS}
-                      placeholder="Select origin…"
+                      options={originSelectOptions}
+                      placeholder={t('addBeetle.selectOrigin')}
                       invalid={Boolean(editErrors.origin)}
                     />
                   </FormField>
@@ -530,15 +552,15 @@ export function AddBeetle({ beetles, growthEntries = [], onAdd, onUpdate }: AddB
                     error={editErrors.sizeMm}
                     onChange={(v) => updateEdit('sizeMm', v)}
                   />
-                  <FormField label="Color" error={editErrors.color}>
+                  <FormField label={t('addBeetle.color')} error={editErrors.color}>
                     <TextInput
                       value={editForm.color}
                       onChange={(v) => updateEdit('color', v)}
-                      placeholder="e.g. Metallic Green, Rainbow, Blue, Red"
+                      placeholder={t('addBeetle.colorPlaceholder')}
                       invalid={Boolean(editErrors.color)}
                     />
                   </FormField>
-                  <FormField label="Notes" className="md:col-span-2">
+                  <FormField label={t('addBeetle.notes')} className="md:col-span-2">
                     <textarea
                       value={editForm.notes}
                       onChange={(e) => updateEdit('notes', e.target.value)}

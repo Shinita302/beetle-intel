@@ -185,12 +185,12 @@ export function Dashboard({
           <h1 className="text-xl font-bold text-gray-100">{t('pages.dashboardTitle')}</h1>
           <p className="text-sm text-gray-500 mt-0.5">{t('pages.dashboardSubtitle')}</p>
         </div>
-        <FormField label="Species" className="w-full sm:w-64">
+        <FormField label={t('dashboard.species')} className="w-full sm:w-64">
           <SelectInput
             value={speciesFilter}
             onChange={setSpeciesFilter}
             options={[
-              { value: ALL_SPECIES_FILTER, label: 'All species' },
+              { value: ALL_SPECIES_FILTER, label: t('dashboard.allSpecies') },
               ...speciesOptions.map((species) => ({ value: species, label: species })),
             ]}
           />
@@ -221,7 +221,7 @@ export function Dashboard({
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatCard
-          label={hasInventory ? 'Total Population' : 'Total Beetles'}
+          label={hasInventory ? t('dashboard.totalPopulation') : 'Total Beetles'}
           value={totalPopulation}
           icon={Bug}
           color="bg-sky-500/15 text-sky-400"
@@ -229,7 +229,7 @@ export function Dashboard({
           onClick={() => onNavigate(hasInventory ? 'inventory' : 'add-beetle')}
         />
         <StatCard
-          label="Active Larvae"
+          label={t('dashboard.activeLarvae')}
           value={activeLarvae}
           icon={Sprout}
           color="bg-emerald-500/15 text-emerald-400"
@@ -237,14 +237,14 @@ export function Dashboard({
           onClick={() => onNavigate('larval-growth')}
         />
         <StatCard
-          label="Avg Hatch Rate"
+          label={t('dashboard.avgHatchRate')}
           value={avgHatchRate == null ? '--' : `${avgHatchRate}%`}
           icon={Egg}
           color="bg-amber-500/15 text-amber-400"
         />
         <StatCard
-          label="Top Performing Species"
-          value={topPerformingSpecies?.species ?? 'No data'}
+          label={t('dashboard.topPerformingSpecies')}
+          value={topPerformingSpecies?.species ?? t('dashboard.noData')}
           detail={
             topPerformingSpecies ? `${topPerformingSpecies.hatchRate}% Hatch Rate` : undefined
           }
@@ -253,7 +253,7 @@ export function Dashboard({
           color="bg-violet-500/15 text-violet-400"
         />
         <StatCard
-          label={hasInventory ? 'Adults' : 'Avg Fertility'}
+          label={hasInventory ? t('dashboard.adults') : 'Avg Fertility'}
           value={hasInventory ? totalAdults : avgFertility}
           icon={Flame}
           color="bg-teal-500/15 text-teal-400"
@@ -265,7 +265,7 @@ export function Dashboard({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Larval Growth Chart */}
         <Card>
-          <CardHeader title="Larval Growth Tracking" subtitle="Weight over time (top beetles)" />
+          <CardHeader title={t('dashboard.larvalGrowthTitle')} subtitle={t('dashboard.larvalGrowthSubtitle')} />
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               {useBarChart ? (
@@ -315,10 +315,10 @@ export function Dashboard({
         {/* Fertility Ranking */}
         <Card>
           <CardHeader
-            title="Fertility Ranking"
+            title={t('dashboard.fertilityRankingTitle')}
             subtitle={
               speciesFilter === ALL_SPECIES_FILTER
-                ? 'Pairing performance score'
+                ? t('dashboard.fertilityRankingSubtitle')
                 : `Pairing performance for ${speciesFilter}`
             }
           />
@@ -352,20 +352,20 @@ export function Dashboard({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Recent Pairings */}
         <Card className="lg:col-span-2">
-          <CardHeader title="Recent Pairings" action={
+          <CardHeader title={t('dashboard.recentPairings')} action={
             <button onClick={() => onNavigate('pairing')} className="text-xs text-sky-400 hover:text-sky-300 font-medium flex items-center gap-1">
-              All <ExternalLink className="w-3 h-3" />
+              {t('dashboard.all')} <ExternalLink className="w-3 h-3" />
             </button>
           } />
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-800">
-                  <th className="text-left py-2 text-gray-500 font-medium">Pair</th>
-                  <th className="text-left py-2 text-gray-500 font-medium">Date</th>
-                  <th className="text-right py-2 text-gray-500 font-medium">Eggs</th>
-                  <th className="text-right py-2 text-gray-500 font-medium">Hatched</th>
-                  <th className="text-right py-2 text-gray-500 font-medium">Emerged</th>
+                  <th className="text-left py-2 text-gray-500 font-medium">{t('dashboard.pair')}</th>
+                  <th className="text-left py-2 text-gray-500 font-medium">{t('dashboard.date')}</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">{t('dashboard.eggs')}</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">{t('dashboard.hatched')}</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">{t('dashboard.emerged')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -382,7 +382,7 @@ export function Dashboard({
                 ))}
                 {recentPairings.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-4 text-center text-gray-600">No pairings recorded yet</td>
+                    <td colSpan={5} className="py-4 text-center text-gray-600">{t('dashboard.noPairings')}</td>
                   </tr>
                 )}
               </tbody>
@@ -392,9 +392,9 @@ export function Dashboard({
 
         {/* Pest Risk Inbox */}
         <Card>
-          <CardHeader title="Pest Inbox" subtitle={`${openPestRisks.length} open`} action={
+          <CardHeader title={t('dashboard.pestInbox')} subtitle={t('dashboard.openCount', { count: openPestRisks.length })} action={
             <button onClick={() => onNavigate('pest-risk')} className="text-xs text-sky-400 hover:text-sky-300 font-medium flex items-center gap-1">
-              All <ExternalLink className="w-3 h-3" />
+              {t('dashboard.all')} <ExternalLink className="w-3 h-3" />
             </button>
           } />
           <div className="space-y-2.5">
@@ -410,7 +410,7 @@ export function Dashboard({
               </div>
             ))}
             {pestRisks.length === 0 && (
-              <p className="text-xs text-gray-600 text-center py-4">No pest risks logged</p>
+              <p className="text-xs text-gray-600 text-center py-4">{t('dashboard.noPestRisks')}</p>
             )}
           </div>
         </Card>
@@ -418,14 +418,14 @@ export function Dashboard({
 
       {/* Quick Links */}
       <Card>
-        <CardHeader title="Quick Actions" />
+        <CardHeader title={t('dashboard.quickActions')} />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {(
             [
               { label: t('nav.addBeetle'), page: 'add-beetle' as const, icon: Bug },
-              { label: 'Log Growth', page: 'larval-growth' as const, icon: Sprout },
-              { label: 'New Pairing', page: 'pairing' as const, icon: HeartHandshake },
-              { label: 'Report Pest', page: 'pest-risk' as const, icon: ShieldAlert },
+              { label: t('dashboard.logGrowth'), page: 'larval-growth' as const, icon: Sprout },
+              { label: t('dashboard.newPairing'), page: 'pairing' as const, icon: HeartHandshake },
+              { label: t('dashboard.reportPest'), page: 'pest-risk' as const, icon: ShieldAlert },
             ] as const
           ).map((item) => {
             const Icon = item.icon;

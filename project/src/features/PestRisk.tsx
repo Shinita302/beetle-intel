@@ -25,20 +25,24 @@ interface PestRiskProps {
   onUpdate: (risk: PestRisk) => void;
 }
 
-const problemOptions: { value: PestProblem; label: string }[] = [
-  { value: 'mites', label: 'Mites' },
-  { value: 'mold', label: 'Mold' },
-  { value: 'dryness', label: 'Dryness' },
-  { value: 'over-wet', label: 'Over-Wet' },
-  { value: 'smell', label: 'Foul Smell' },
-  { value: 'unknown', label: 'Unknown' },
-];
+const problemLabelKeys: Record<PestProblem, string> = {
+  mites: 'pest.mites',
+  mold: 'pest.mold',
+  dryness: 'pest.dryness',
+  'over-wet': 'pest.overWet',
+  smell: 'pest.smell',
+  unknown: 'pest.unknown',
+};
 
-const severityOptions: { value: Severity; label: string }[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-];
+const problemValues: PestProblem[] = ['mites', 'mold', 'dryness', 'over-wet', 'smell', 'unknown'];
+
+const severityLabelKeys: Record<Severity, string> = {
+  low: 'pest.low',
+  medium: 'pest.medium',
+  high: 'pest.high',
+};
+
+const severityValues: Severity[] = ['low', 'medium', 'high'];
 
 const severityVariant: Record<Severity, 'warning' | 'danger'> = {
   low: 'warning',
@@ -50,15 +54,6 @@ const riskLevelVariant: Record<PestRiskLevel, 'success' | 'warning' | 'danger'> 
   low: 'success',
   moderate: 'warning',
   high: 'danger',
-};
-
-const problemLabel: Record<string, string> = {
-  mites: 'Mites',
-  mold: 'Mold',
-  dryness: 'Dryness',
-  'over-wet': 'Over-Wet',
-  smell: 'Foul Smell',
-  unknown: 'Unknown',
 };
 
 const emptyReportForm = {
@@ -80,6 +75,9 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
   const [saved, setSaved] = useState(false);
 
   const nextId = `PR-${String(pestRisks.length + 1).padStart(3, '0')}`;
+  const problemLabel = (problem: PestProblem) => t(problemLabelKeys[problem] ?? 'pest.unknown');
+  const problemOptions = problemValues.map((value) => ({ value, label: problemLabel(value) }));
+  const severityOptions = severityValues.map((value) => ({ value, label: t(severityLabelKeys[value]) }));
 
   const updateReport = <K extends keyof typeof reportForm>(key: K, value: (typeof reportForm)[K]) => {
     setReportForm((prev) => ({ ...prev, [key]: value }));
@@ -145,7 +143,7 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
         </div>
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[10px] font-semibold text-amber-300 uppercase tracking-wide">
           <Lock className="w-3 h-3" />
-          Premium Tools
+          {t('pest.premiumTools')}
         </span>
       </div>
 
@@ -160,7 +158,7 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
           <div className="flex flex-wrap gap-2">
             {openRisks.map((r) => (
               <Badge key={r.id} variant={severityVariant[r.severity]}>
-                {r.bottleId}: {problemLabel[r.problemType]}
+                {r.bottleId}: {problemLabel(r.problemType)}
                 {r.riskLevel != null && ` · ${PEST_RISK_LEVEL_LABEL[r.riskLevel]}`}
               </Badge>
             ))}
@@ -169,9 +167,9 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
       )}
 
       <PremiumPaywall
-        title="Pest Risk Assessment"
-        subtitle="Enter environmental data to review qualitative risk factors. Designed for future AI model integration."
-        footer="Upgrade to Premium to unlock full AI assessments. Preview mode uses on-device placeholder logic."
+        title={t('pest.assessmentTitle')}
+        subtitle={t('pest.assessmentSubtitle')}
+        footer={t('pest.upgradeFooter')}
       >
         <PestPredictionPanel
           form={predictionForm}
@@ -183,19 +181,19 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
 
       <form onSubmit={handleSubmit}>
         <Card>
-          <CardHeader title="Report Pest Issue" subtitle={`Case ID: ${nextId}`} />
+          <CardHeader title={t('pest.reportTitle')} subtitle={t('pest.caseId', { id: nextId })} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField label="Bottle ID" required>
+            <FormField label={t('pest.bottleId')} required>
               <TextInput
                 value={reportForm.bottleId}
                 onChange={(v) => updateReport('bottleId', v)}
-                placeholder="e.g. BT-A12"
+                placeholder={t('pest.bottlePlaceholder')}
                 required
               />
             </FormField>
 
-            <FormField label="Problem Type" required>
+            <FormField label={t('pest.problemType')} required>
               <SelectInput
                 value={reportForm.problemType}
                 onChange={(v) => updateReport('problemType', v as PestProblem)}
@@ -203,7 +201,7 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
               />
             </FormField>
 
-            <FormField label="Severity" required>
+            <FormField label={t('pest.severity')} required>
               <SelectInput
                 value={reportForm.severity}
                 onChange={(v) => updateReport('severity', v as Severity)}
@@ -211,15 +209,15 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
               />
             </FormField>
 
-            <FormField label="Date Noticed">
+            <FormField label={t('pest.dateNoticed')}>
               <TextInput type="date" value={reportForm.dateNoticed} onChange={(v) => updateReport('dateNoticed', v)} />
             </FormField>
 
-            <FormField label="Action Taken" className="md:col-span-2">
+            <FormField label={t('pest.actionTaken')} className="md:col-span-2">
               <textarea
                 value={reportForm.actionTaken}
                 onChange={(e) => updateReport('actionTaken', e.target.value)}
-                placeholder="Describe what action was taken..."
+                placeholder={t('pest.actionPlaceholder')}
                 rows={3}
                 className="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:ring-1 focus:ring-sky-500/50 focus:border-sky-500/50 transition-colors resize-none"
               />
@@ -227,7 +225,7 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
           </div>
 
           <p className="text-[11px] text-gray-500 mt-4">
-            Saving a report also stores the latest premium prediction inputs when available.
+            {t('pest.saveNote')}
           </p>
 
           <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-800">
@@ -236,7 +234,7 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
             </div>
             <Button type="submit" variant="primary">
               <Save className="w-4 h-4" />
-              Report Issue
+              {t('pest.reportIssue')}
             </Button>
           </div>
         </Card>
@@ -254,7 +252,7 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-gray-300 font-medium">{r.bottleId}</span>
-                    <Badge variant={severityVariant[r.severity]}>{problemLabel[r.problemType]}</Badge>
+                    <Badge variant={severityVariant[r.severity]}>{problemLabel(r.problemType)}</Badge>
                     <Badge variant="danger">{r.severity}</Badge>
                     {r.riskLevel != null && (
                       <Badge variant={riskLevelVariant[r.riskLevel]}>
@@ -300,7 +298,7 @@ export function PestRiskPage({ pestRisks, onAdd, onUpdate }: PestRiskProps) {
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-xs text-gray-400">{r.bottleId}</span>
                   <Badge variant="success">resolved</Badge>
-                  <span className="text-[10px] text-gray-600 truncate">{problemLabel[r.problemType]}</span>
+                  <span className="text-[10px] text-gray-600 truncate">{problemLabel(r.problemType)}</span>
                 </div>
                 <span className="text-[10px] text-gray-600 flex-shrink-0">{r.dateNoticed}</span>
               </div>

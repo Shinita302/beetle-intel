@@ -8,6 +8,7 @@ interface SubstrateTypeFieldProps {
   onCustomChange: (value: string) => void;
   label?: string;
   hint?: string;
+  options?: readonly { value: string; label: string }[];
 }
 
 export function SubstrateTypeField({
@@ -17,6 +18,7 @@ export function SubstrateTypeField({
   onCustomChange,
   label = 'Substrate Type',
   hint,
+  options = SUBSTRATE_PRESET_OPTIONS,
 }: SubstrateTypeFieldProps) {
   const isCustom = selection === SUBSTRATE_CUSTOM;
 
@@ -26,7 +28,7 @@ export function SubstrateTypeField({
         <SelectInput
           value={selection}
           onChange={onSelectionChange}
-          options={[...SUBSTRATE_PRESET_OPTIONS]}
+          options={[...options]}
         />
       </FormField>
       {isCustom && (

@@ -178,9 +178,9 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
 
       {showAdd && (
         <Card>
-          <CardHeader title={t('inventory.addSpecies')} subtitle="Start tracking a new species in your collection" />
+          <CardHeader title={t('inventory.addSpecies')} subtitle={t('inventory.addSpeciesSubtitle')} />
           <div className="flex flex-wrap gap-3 items-end">
-            <FormField label="Species name" className="flex-1 min-w-[220px]">
+            <FormField label={t('inventory.speciesName')} className="flex-1 min-w-[220px]">
               <TextInput
                 value={newSpecies}
                 onChange={setNewSpecies}
@@ -189,7 +189,7 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
             </FormField>
             <Button type="button" variant="primary" onClick={addSpecies}>
               <Save className="w-4 h-4" />
-              Add
+              {t('inventory.add')}
             </Button>
           </div>
         </Card>
@@ -296,7 +296,7 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
               {pageRows.length === 0 && (
                 <tr>
                   <td colSpan={10} className="py-8 text-center text-gray-600">
-                    No species inventory yet. Add a species to get started.
+                    {t('inventory.empty')}
                   </td>
                 </tr>
               )}

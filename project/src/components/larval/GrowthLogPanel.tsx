@@ -18,6 +18,7 @@ import { parseSubstrateType, resolveSubstrateType } from '../../constants/substr
 import type { Beetle, GrowthEntry, GrowthStage } from '../../types';
 import { beetleLabel } from '../../types';
 import { beetleImportIdSortKey, beetlesWithGrowthData, growthEntriesForBeetle } from '../../utils/importGrowthSheet';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface GrowthLogPanelProps {
   beetles: Beetle[];
@@ -181,6 +182,7 @@ export function GrowthLogPanel({
   onUpdateEntry,
   onDeleteEntry,
 }: GrowthLogPanelProps) {
+  const { t } = useLanguage();
   const [selectedBeetleId, setSelectedBeetleId] = useState('');
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [addForm, setAddForm] = useState(emptyForm);
@@ -282,8 +284,8 @@ export function GrowthLogPanel({
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader title="Growth Log" subtitle="Weight history per beetle — chart-ready" />
-        <FormField label="Beetle">
+        <CardHeader title={t('growth.logTitle')} subtitle={t('growth.logSubtitle')} />
+        <FormField label={t('growth.beetle')}>
           <SelectInput
             value={selectedBeetleId}
             onChange={(value) => {
@@ -291,15 +293,11 @@ export function GrowthLogPanel({
               closeEdit();
             }}
             options={beetleOptions}
-            placeholder="Select beetle…"
+            placeholder={t('growth.selectBeetle')}
           />
         </FormField>
         {beetleOptions.length === 0 && (
-          <p className="text-sm text-gray-500 mt-3">
-            No larvae with growth data yet. Import your spreadsheet (Larval Growth tab) from{' '}
-            <span className="text-gray-400">Import</span>, or add a growth entry manually after
-            selecting a beetle profile.
-          </p>
+          <p className="text-sm text-gray-500 mt-3">{t('growth.noLarvae')}</p>
         )}
       </Card>
 

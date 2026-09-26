@@ -1,5 +1,6 @@
 import { Crown, Sparkles } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface PremiumPaywallProps {
   title: string;
@@ -9,6 +10,7 @@ interface PremiumPaywallProps {
 }
 
 export function PremiumPaywall({ title, subtitle, children, footer }: PremiumPaywallProps) {
+  const { t } = useLanguage();
   return (
     <div className="relative rounded-xl border border-amber-500/25 bg-gradient-to-br from-amber-500/5 via-gray-900/90 to-gray-950 overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-500/10 via-transparent to-transparent pointer-events-none" />
@@ -17,7 +19,7 @@ export function PremiumPaywall({ title, subtitle, children, footer }: PremiumPay
           <div className="flex items-center gap-2 mb-1">
             <Crown className="w-4 h-4 text-amber-400" />
             <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400/90">
-              Premium Feature
+              {t('pest.premiumFeature')}
             </span>
           </div>
           <h2 className="text-sm font-semibold text-gray-100">{title}</h2>
@@ -25,7 +27,7 @@ export function PremiumPaywall({ title, subtitle, children, footer }: PremiumPay
         </div>
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-[10px] font-medium text-amber-300">
           <Sparkles className="w-3 h-3" />
-          Paywall Preview
+          {t('pest.paywallPreview')}
         </span>
       </div>
       <div className="relative p-5">{children}</div>

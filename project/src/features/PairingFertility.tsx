@@ -216,11 +216,11 @@ export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: Pairing
       <form onSubmit={handleSubmit}>
         <Card>
           <CardHeader
-            title={isEditing ? 'Breeding Record' : 'New Pairing'}
+            title={isEditing ? 'Breeding Record' : t('pairing.newPairingTitle')}
             subtitle={
               isEditing
                 ? `${activePairingId} — update outcomes as your breeding cycle progresses`
-                : `${nextId} — male, female, and pairing date only`
+                : t('pairing.newPairingSubtitle', { id: nextId })
             }
           />
 

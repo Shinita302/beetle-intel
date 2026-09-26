@@ -26,6 +26,7 @@ import {
   runHybridImportPipeline,
 } from '../utils/hybridImportPipeline';
 import { totalPopulationInventory } from '@/types';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ImportSpreadsheetProps {
   beetles: Beetle[];
@@ -55,6 +56,7 @@ function isAcceptedSpreadsheet(file: File): boolean {
 }
 
 export function ImportSpreadsheet({ beetles, growthEntries, userId, onImportConfirmed }: ImportSpreadsheetProps) {
+  const { t } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<ImportStep>('parse');
   const [fileName, setFileName] = useState('');
@@ -175,15 +177,15 @@ export function ImportSpreadsheet({ beetles, growthEntries, userId, onImportConf
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2">
-        <Badge variant={step === 'parse' ? 'info' : 'neutral'}>1. Parse spreadsheet</Badge>
-        <Badge variant={step === 'review' ? 'info' : 'neutral'}>2. Review & edit groups</Badge>
-        <Badge variant={step === 'done' ? 'success' : 'neutral'}>3. Import</Badge>
+        <Badge variant={step === 'parse' ? 'info' : 'neutral'}>1. {t('importPage.stepParse')}</Badge>
+        <Badge variant={step === 'review' ? 'info' : 'neutral'}>2. {t('importPage.stepReview')}</Badge>
+        <Badge variant={step === 'done' ? 'success' : 'neutral'}>3. {t('importPage.stepImport')}</Badge>
       </div>
 
       <Card>
         <CardHeader
-          title="Upload"
-          subtitle="Hybrid import: deterministic rules first, optional LLM for messy blocks"
+          title={t('importPage.uploadTitle')}
+          subtitle={t('importPage.uploadSubtitle')}
         />
         <input
           ref={fileInputRef}
@@ -214,9 +216,9 @@ export function ImportSpreadsheet({ beetles, growthEntries, userId, onImportConf
         >
           <Upload className="w-5 h-5 text-sky-400 mx-auto mb-2" />
           <p className="text-sm text-gray-300">
-            {dragActive ? 'Drop spreadsheet here' : 'Click or drag spreadsheet here'}
+            {dragActive ? 'Drop spreadsheet here' : t('importPage.clickOrDrag')}
           </p>
-          <p className="text-xs text-gray-500 mt-1">CSV or XLSX</p>
+          <p className="text-xs text-gray-500 mt-1">{t('importPage.fileTypes')}</p>
         </div>
         {loading && <Badge variant="info" className="mt-3">Parsing blocks…</Badge>}
         {fileName && <Badge variant="success" className="mt-3">Loaded: {fileName}</Badge>}
@@ -424,7 +426,7 @@ export function ImportSpreadsheet({ beetles, growthEntries, userId, onImportConf
       {!hybridResult && !loading && (
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <ArrowRight className="w-4 h-4" />
-          Upload a breeder inventory sheet to begin hybrid import.
+          {t('importPage.beginHint')}
         </div>
       )}
     </div>
