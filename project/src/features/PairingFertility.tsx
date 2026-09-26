@@ -273,12 +273,12 @@ export function PairingFertility({ beetles, pairings, onAdd, onUpdate }: Pairing
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-800">
-                  <th className="text-left py-2 text-gray-500 font-medium">Pair</th>
-                  <th className="text-left py-2 text-gray-500 font-medium">Paired</th>
-                  <th className="text-right py-2 text-gray-500 font-medium">Eggs</th>
-                  <th className="text-right py-2 text-gray-500 font-medium">Hatched</th>
-                  <th className="text-right py-2 text-gray-500 font-medium">Emerged</th>
-                  <th className="text-right py-2 text-gray-500 font-medium">Score</th>
+                  <th className="text-left py-2 text-gray-500 font-medium">{t('pairing.historyPair')}</th>
+                  <th className="text-left py-2 text-gray-500 font-medium">{t('pairing.historyPaired')}</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">{t('pairing.historyEggs')}</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">{t('pairing.historyHatched')}</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">{t('pairing.historyEmerged')}</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">{t('pairing.historyScore')}</th>
                 </tr>
               </thead>
               <tbody>

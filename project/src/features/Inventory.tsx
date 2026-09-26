@@ -171,9 +171,9 @@ export function Inventory({ speciesInventory, onUpdate, onUpsert }: InventoryPro
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard label={t('inventory.totalSpecies')} value={summary.totalSpecies} icon={Bug} color="bg-sky-500/15 text-sky-400" />
-        <StatCard label="Total Population" value={summary.totalPopulation} icon={Users} color="bg-teal-500/15 text-teal-400" />
-        <StatCard label="Active Larvae" value={summary.activeLarvae} icon={Sprout} color="bg-emerald-500/15 text-emerald-400" />
-        <StatCard label="Adults" value={summary.adults} icon={Egg} color="bg-amber-500/15 text-amber-400" />
+        <StatCard label={t('inventory.totalPopulation')} value={summary.totalPopulation} icon={Users} color="bg-teal-500/15 text-teal-400" />
+        <StatCard label={t('inventory.activeLarvae')} value={summary.activeLarvae} icon={Sprout} color="bg-emerald-500/15 text-emerald-400" />
+        <StatCard label={t('inventory.adults')} value={summary.adults} icon={Egg} color="bg-amber-500/15 text-amber-400" />
       </div>
 
       {showAdd && (
