@@ -9,6 +9,9 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { getAuthCallbackUrl } from '@/lib/authRedirect';
 import { createClient } from '@/lib/supabase/client';
 
+// Keep false until the Google provider is enabled in Supabase (Authentication → Sign In / Providers).
+const GOOGLE_SIGN_IN_ENABLED = false;
+
 export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -133,18 +136,22 @@ export default function LoginClient() {
           </AuthButton>
         </form>
 
-        <div className="relative my-5">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-800" />
-          </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="bg-gray-900/60 px-2 text-gray-600">{t('common.or')}</span>
-          </div>
-        </div>
+        {GOOGLE_SIGN_IN_ENABLED && (
+          <>
+            <div className="relative my-5">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-800" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-gray-900/60 px-2 text-gray-600">{t('common.or')}</span>
+              </div>
+            </div>
 
-        <AuthButton type="button" variant="secondary" disabled={loading} onClick={handleGoogle}>
-          {t('auth.continueGoogle')}
-        </AuthButton>
+            <AuthButton type="button" variant="secondary" disabled={loading} onClick={handleGoogle}>
+              {t('auth.continueGoogle')}
+            </AuthButton>
+          </>
+        )}
       </AuthShell>
     </div>
   );
